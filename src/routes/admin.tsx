@@ -314,7 +314,7 @@ const Admin: Component = () => {
               <div class="stat-card">
                 <div class="stat-header">
                   <div>
-                    <div class="stat-title">Eventos Vendidos</div>
+                    <div class="stat-title">Eventos Totales</div>
                   </div>
                   <div class="stat-icon blue">
                     <i class="fas fa-shopping-cart"></i>
@@ -342,7 +342,7 @@ const Admin: Component = () => {
               <div class="stat-card">
                 <div class="stat-header">
                   <div>
-                    <div class="stat-title">Ingresos</div>
+                    <div class="stat-title">Check-in</div>
                   </div>
                   <div class="stat-icon teal">
                     <i class="fas fa-dollar-sign"></i>
