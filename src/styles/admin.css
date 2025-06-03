@@ -189,6 +189,8 @@ body {
   color: white;
   padding: 24px 0;
   position: fixed;
+  left: 0;
+  top: 0;
   height: 100vh;
   overflow-y: auto;
   box-shadow: 4px 0 6px -1px rgba(0, 0, 0, 0.1);
@@ -772,7 +774,7 @@ body {
   margin-top: 4px;
 }
 
-./* Cards de Eventos - Estilo Integrado */
+/* Cards de Eventos - Estilo Integrado */
 .eventos-cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
