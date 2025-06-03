@@ -295,7 +295,7 @@ const Admin: Component = () => {
             
             <div class="nav-section">
               <div class="nav-section-title">Gestionar</div>
-              <div class="nav-item">
+              <div class="nav-item" onclick="window.location.href='/eventos'" style="cursor: pointer;">
                 <i class="fas fa-calendar-alt"></i>
                 <span>Eventos</span>
               </div>
@@ -374,9 +374,6 @@ const Admin: Component = () => {
             <div class="stats-grid">
               <div class="stat-card">
                 <div class="stat-header">
-                  <div>
-                    <div class="stat-title">Eventos Totales</div>
-                  </div>
                   <div class="stat-icon blue">
                     <i class="fas fa-calendar-alt"></i>
                   </div>

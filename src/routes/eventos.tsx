@@ -1,593 +1,370 @@
-import { createSignal, For, Show } from 'solid-js';
-import '../styles/eventos.css';
+import { Component, createEffect, createSignal, onMount, Show, For } from 'solid-js';
+import { eventosService } from '../lib/supabase/services';
+import '../styles/admin.css';
 
-// Datos de ejemplo para eventos
-const eventosData = [
-  {
-    id: 1,
-    titulo: 'Concierto de Música Clásica - EVENTO ACTIVO AHORA',
-    fecha: new Date().toISOString().split('T')[0], // Fecha de hoy
-    hora: `${(new Date().getHours() < 10 ? '0' : '') + new Date().getHours()}:${(new Date().getMinutes() < 10 ? '0' : '') + new Date().getMinutes()}`, // Hora actual
-    categoria: 'Música',
-    descripcion: 'Una noche mágica con la Orquesta Sinfónica Nacional interpretando las mejores piezas de la música clásica mundial.',
-    imagen: '/images/concierto1.jpg',
-    ubicacion: 'Teatro Principal',
-    precio: 'Entrada gratuita'
-  },
-  {
-    id: 2,
-    titulo: 'Exposición de Arte Contemporáneo',
-    fecha: '2025-01-25',
-    hora: '18:00',
-    categoria: 'Arte Visual',
-    descripcion: 'Una muestra de los artistas contemporáneos más destacados del Caribe, con obras que reflejan la diversidad cultural de nuestra región.',
-    imagen: '/images/arte1.jpg',
-    ubicacion: 'Galería Principal',
-    precio: 'Entrada gratuita'
-  },
-  {
-    id: 3,
-    titulo: 'Teatro: "Voces del Caribe"',
-    fecha: '2025-06-25',
-    hora: '20:00',
-    ubicacion: 'Teatro Negro',
-    descripcion: 'Puesta en escena original que explora la identidad caribeña a través de monólogos y música.',
-    imagen: 'teatro',
-    categoria: 'Teatro',
-    cuposDisponibles: 45,
-    cuposTotal: 60,
-    precio: 'RD$ 500'
-  },
-  {
-    id: 4,
-    titulo: 'Taller: Fotografía Digital',
-    fecha: '2025-07-01',
-    hora: '15:00',
-    ubicacion: 'Aula Multimedia',
-    descripcion: 'Taller práctico sobre técnicas básicas de fotografía digital para principiantes.',
-    imagen: 'taller',
-    categoria: 'Taller',
-    cuposDisponibles: 12,
-    cuposTotal: 15,
-    precio: 'RD$ 800'
-  },
-  {
-    id: 5,
-    titulo: 'Conferencia: Historia del Merengue',
-    fecha: '2025-07-05',
-    hora: '17:00',
-    ubicacion: 'Auditorio Principal',
-    descripcion: 'Conferencia magistral sobre los orígenes y evolución del merengue dominicano.',
-    imagen: 'conferencia',
-    categoria: 'Conferencia',
-    cuposDisponibles: 180,
-    cuposTotal: 200,
-    precio: 'Entrada Libre'
-  },
-  {
-    id: 6,
-    titulo: 'Festival de Poesía Joven',
-    fecha: '2025-07-10',
-    hora: '19:00',
-    ubicacion: 'Patio Central',
-    descripcion: 'Encuentro de jóvenes poetas dominicanos presentando sus obras más recientes.',
-    imagen: 'literatura',
-    categoria: 'Literatura',
-    cuposDisponibles: 100,
-    cuposTotal: 120,
-    precio: 'Entrada Libre'
-  }
-];
-
-// Función helper para generar código único
-const generarCodigoUnico = () => {
-  const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let codigo = '';
-  for (let i = 0; i < 6; i++) {
-    codigo += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
-  }
-  return `CCB-${new Date().getFullYear()}-${codigo}`;
+// Función para verificar si Supabase está configurado
+const isSupabaseConfigured = () => {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  return url && key && !url.includes('tu-proyecto') && !key.includes('tu-anon-key');
 };
 
-// Función para detectar si un evento está activo (en curso o a punto de empezar)
-const esEventoActivo = (fecha: string, hora: string) => {
-  const ahora = new Date();
-  const [year, month, day] = fecha.split('-');
-  const [hours, minutes] = hora.split(':');
-  
-  const eventoDateTime = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes));
-  const diferenciaHoras = (eventoDateTime.getTime() - ahora.getTime()) / (1000 * 60 * 60);
-  
-  // Evento activo si es dentro de 2 horas o hasta 1 hora después de empezar
-  return diferenciaHoras <= 2 && diferenciaHoras >= -1;
-};
+const Eventos: Component = () => {
+  const [isAuthenticated, setIsAuthenticated] = createSignal(false);
+  const [eventos, setEventos] = createSignal([]);
+  const [isLoading, setIsLoading] = createSignal(true);
+  const [searchTerm, setSearchTerm] = createSignal('');
+  const [filterCategory, setFilterCategory] = createSignal('todas');
+  const [filterStatus, setFilterStatus] = createSignal('todos');
 
-// Función helper para obtener íconos basados en categoría
-const obtenerIconoEvento = (tipoImagen: string) => {
-  const iconos = {
-    'música': 'fas fa-music',
-    'arte': 'fas fa-palette',
-    'teatro': 'fas fa-theater-masks',
-    'taller': 'fas fa-tools',
-    'conferencia': 'fas fa-microphone',
-    'literatura': 'fas fa-book'
-  };
-  return iconos[tipoImagen] || 'fas fa-calendar-alt';
-};
-
-// Función helper para obtener colores basados en categoría
-const obtenerColorEvento = (tipoImagen: string) => {
-  const colores = {
-    'música': '#00BDF2',
-    'arte': '#FFD700',
-    'teatro': '#8E44AD',
-    'taller': '#E74C3C',
-    'conferencia': '#27AE60',
-    'literatura': '#9B59B6'
-  };
-  return colores[tipoImagen] || '#F99D2A';
-};
-
-export default function Eventos() {
-  const [filtroCategoria, setFiltroCategoria] = createSignal('Todos');
-  const [busqueda, setBusqueda] = createSignal('');
-  const [modalAbierto, setModalAbierto] = createSignal(false);
-  const [eventoSeleccionado, setEventoSeleccionado] = createSignal(null);
-  const [modalRegistroAbierto, setModalRegistroAbierto] = createSignal(false);
-  const [eventoParaRegistro, setEventoParaRegistro] = createSignal(null);
-  const [codigoGenerado, setCodigoGenerado] = createSignal('');
-  const [esRegistroDirecto, setEsRegistroDirecto] = createSignal(false);
-  const [modalCodigoAbierto, setModalCodigoAbierto] = createSignal(false);
-  const [formData, setFormData] = createSignal({
-    nombre: '',
-    apellido: '',
-    email: '',
-    telefono: ''
+  // Verificar autenticación
+  onMount(() => {
+    console.log('Eventos: Verificando autenticación...');
+    const authStatus = localStorage.getItem('admin_authenticated');
+    console.log('Estado de autenticación:', authStatus);
+    
+    // Modo de test - bypass automático (SOLO para development)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('test') === 'true') {
+      console.log('🧪 Modo de test activado - bypass de login');
+      setIsAuthenticated(true);
+      localStorage.setItem('admin_authenticated', 'true');
+      cargarEventos();
+      return;
+    }
+    
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+      cargarEventos();
+    }
   });
 
-  const categorias = ['Todos', 'Música', 'Arte Visual', 'Teatro', 'Taller', 'Conferencia', 'Literatura'];
-
-  // Función para manejar cambios en el formulario
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const cargarEventos = async () => {
+    console.log('📅 Cargando eventos...');
+    setIsLoading(true);
+    
+    try {
+      const eventosData = await eventosService.obtenerTodos();
+      console.log('📅 Eventos cargados:', eventosData);
+      setEventos(eventosData);
+    } catch (error) {
+      console.error('❌ Error cargando eventos:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const eventosFiltrados = () => {
-    return eventosData.filter(evento => {
-      const coincideCategoria = filtroCategoria() === 'Todos' || evento.categoria === filtroCategoria();
-      const coincideBusqueda = evento.titulo.toLowerCase().includes(busqueda().toLowerCase()) ||
-                              evento.descripcion.toLowerCase().includes(busqueda().toLowerCase());
-      return coincideCategoria && coincideBusqueda;
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('admin_authenticated');
+    window.location.href = '/admin';
+  };
+
+  const filteredEventos = () => {
+    return eventos().filter(evento => {
+      const matchesSearch = evento.titulo.toLowerCase().includes(searchTerm().toLowerCase()) ||
+                           evento.descripcion.toLowerCase().includes(searchTerm().toLowerCase());
+      const matchesCategory = filterCategory() === 'todas' || evento.categoria === filterCategory();
+      const matchesStatus = filterStatus() === 'todos' || evento.estado === filterStatus();
+      
+      return matchesSearch && matchesCategory && matchesStatus;
     });
   };
 
-  const formatearFecha = (fecha: string) => {
-    const fechaObj = new Date(fecha);
-    return fechaObj.toLocaleDateString('es-DO', {
-      weekday: 'long',
+  const getStatusColor = (estado: string) => {
+    switch (estado) {
+      case 'activo': return '#10B981';
+      case 'borrador': return '#F59E0B';
+      case 'cancelado': return '#EF4444';
+      case 'finalizado': return '#6B7280';
+      default: return '#6B7280';
+    }
+  };
+
+  const formatDate = (fecha: string) => {
+    return new Date(fecha).toLocaleDateString('es-ES', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric'
     });
   };
 
-  const calcularPorcentajeOcupacion = (disponibles: number, total: number) => {
-    return Math.round(((total - disponibles) / total) * 100);
-  };
-
-  const abrirModal = (evento) => {
-    setEventoSeleccionado(evento);
-    setModalAbierto(true);
-    document.body.style.overflow = 'hidden'; // Prevenir scroll del body
-  };
-
-  const cerrarModal = () => {
-    setModalAbierto(false);
-    setEventoSeleccionado(null);
-    document.body.style.overflow = 'auto'; // Restaurar scroll
-  };
-
-  const abrirModalRegistro = (evento) => {
-    setEventoParaRegistro(evento);
-    
-    // Detectar si es un evento activo para registro directo
-    const eventoEsActivo = esEventoActivo(evento.fecha, evento.hora);
-    setEsRegistroDirecto(eventoEsActivo);
-    
-    // Generar código único
-    const codigo = generarCodigoUnico();
-    setCodigoGenerado(codigo);
-    
-    setModalRegistroAbierto(true);
-    document.body.style.overflow = 'hidden';
-  };
-
-  const cerrarModalRegistro = () => {
-    setModalRegistroAbierto(false);
-    setEventoParaRegistro(null);
-    setFormData({
-      nombre: '',
-      apellido: '',
-      email: '',
-      telefono: ''
-    });
-    document.body.style.overflow = 'auto';
-  };
-
-  const confirmarCheckinDirecto = () => {
-    console.log('Check-in confirmado para:', formData().nombre);
-    console.log('Código usado:', codigoGenerado());
-    
-    // Simular cambio de estado del código a USADO
-    alert(`¡Check-in exitoso! Bienvenido/a ${formData().nombre} al evento "${eventoParaRegistro().titulo}". ¡Disfruta la actividad!`);
-    
-    // Cerrar todo y limpiar
-    setModalCodigoAbierto(false);
-    setCodigoGenerado('');
-    setEsRegistroDirecto(false);
-    cerrarModalRegistro();
-  };
-
-  const cerrarModalCodigo = () => {
-    setModalCodigoAbierto(false);
-    setCodigoGenerado('');
-    setEsRegistroDirecto(false);
-    cerrarModalRegistro();
-  };
-
-  const handleSubmitRegistro = (e) => {
-    e.preventDefault();
-    console.log('Registro para evento:', eventoParaRegistro().titulo);
-    console.log('Datos del visitante:', formData());
-    console.log('Código generado:', codigoGenerado());
-    console.log('Es registro directo:', esRegistroDirecto());
-    
-    // Simular guardado en base de datos con estado del código
-    const registro = {
-      ...formData(),
-      evento: eventoParaRegistro(),
-      codigo: codigoGenerado(),
-      estado: esRegistroDirecto() ? 'CHECKIN_DIRECTO' : 'ENVIADO',
-      fechaRegistro: new Date().toISOString()
-    };
-    
-    if (esRegistroDirecto()) {
-      // Para eventos activos: mostrar modal de check-in directo
-      setModalRegistroAbierto(false);
-      setModalCodigoAbierto(true);
-      // No reiniciar el form aún, lo haremos después del check-in
-    } else {
-      // Para eventos futuros: mostrar confirmación y simular envío por email
-      alert(`¡Registro exitoso! Se ha enviado el código ${codigoGenerado()} a ${formData().email} con los detalles del evento.`);
-      cerrarModalRegistro();
-    }
-  };
+  // Comentando la restricción de autenticación por ahora
+  // if (!isAuthenticated()) {
+  //   return (
+  //     <div style="display: flex; align-items: center; justify-content: center; height: 100vh; background: #f8fafc;">
+  //       <div style="text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+  //         <h2>Acceso Restringido</h2>
+  //         <p>Debes iniciar sesión para acceder a esta página.</p>
+  //         <a href="/admin" style="background: #3B82F6; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; display: inline-block; margin-top: 1rem;">
+  //           Ir al Login
+  //         </a>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
-    <div class="eventos-page">
-      {/* Header */}
-      <div class="eventos-hero">
-        <div class="eventos-hero-container">
-          <div class="logo-eventos">
-            {/* Logo del Centro Cultural Banreservas - Sin contorno blanco */}
-            <img src="/images/logo.png" alt="Centro Cultural Banreservas" class="logo-image" />
+    <div class="admin-panel">
+      {/* MISMA Sidebar que admin.tsx */}
+      <aside class="admin-sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-logo">
+            <img src="/images/logo.png" alt="CCB" class="sidebar-logo-icon" />
+            <div class="sidebar-brand">
+              <h1>CCB Admin</h1>
+              <p>Centro Cultural</p>
+            </div>
           </div>
-          <div class="eventos-hero-content">
-            <h1>Eventos del Centro Cultural</h1>
-            <p>Descubre nuestras próximas actividades culturales</p>
-            <div class="hero-actions">
-              <a href="/" class="btn-volver">
-                <i class="fas fa-arrow-left"></i>
-                Volver al Inicio
+        </div>
+        
+        <nav class="sidebar-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Principal</div>
+            <div class="nav-item" onclick="window.location.href='/admin'" style="cursor: pointer;">
+              <i class="fas fa-home"></i>
+              <span>Dashboard</span>
+            </div>
+            <div class="nav-item">
+              <i class="fas fa-chart-bar"></i>
+              <span>Reportes</span>
+            </div>
+            <div class="nav-item">
+              <i class="fas fa-cog"></i>
+              <span>Configuración</span>
+            </div>
+          </div>
+          
+          <div class="nav-section">
+            <div class="nav-section-title">Gestionar</div>
+            <div class="nav-item active">
+              <i class="fas fa-calendar-alt"></i>
+              <span>Eventos</span>
+            </div>
+            <div class="nav-item">
+              <i class="fas fa-users"></i>
+              <span>Visitantes</span>
+            </div>
+            <div class="nav-item">
+              <i class="fas fa-ticket-alt"></i>
+              <span>Registros</span>
+            </div>
+            <div class="nav-item">
+              <i class="fas fa-tags"></i>
+              <span>Promociones</span>
+            </div>
+          </div>
+          
+          <div class="nav-section">
+            <div class="nav-section-title">Herramientas</div>
+            <div class="nav-item">
+              <i class="fas fa-code"></i>
+              <span>Integraciones</span>
+            </div>
+            <div class="nav-item">
+              <i class="fas fa-download"></i>
+              <span>Exportar</span>
+            </div>
+          </div>
+        </nav>
+      </aside>
+
+      {/* MISMO Main Content que admin.tsx */}
+      <main class="admin-main">
+        <header class="main-header">
+          <div class="header-left">
+            <div class="breadcrumb">
+              <span>Eventos</span> / <span>Gestión</span> / Centro Cultural Banreservas
+            </div>
+            <h1 class="main-title">Gestión de Eventos 🎭</h1>
+            <p class="main-subtitle">Administra todos los eventos del Centro Cultural</p>
+          </div>
+          <div class="header-right">
+            <button class="btn-header btn-secondary">
+              <i class="fas fa-download"></i>
+              Exportar
+            </button>
+            <button class="btn-header btn-primary">
+              <i class="fas fa-plus"></i>
+              Nuevo Evento
+            </button>
+            <button class="btn-header btn-logout" onclick={handleLogout}>
+              <i class="fas fa-sign-out-alt"></i>
+              Cerrar Sesión
+            </button>
+          </div>
+        </header>
+
+        <div class="main-content">
+          {/* Alerta de datos mock */}
+          {!isSupabaseConfigured() && (
+            <div class="mock-data-alert" style="background: #FEF3C7; border: 1px solid #F59E0B; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+              <h4 style="margin: 0 0 10px 0; color: #92400E;">🧪 Usando Datos de Prueba</h4>
+              <p style="margin: 0 0 15px 0; color: #92400E;">
+                Supabase no está configurado. Actualmente se muestran eventos mock para demostración.
+              </p>
+              <a 
+                href="/setup-supabase" 
+                style="background: #1E40AF; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; display: inline-block;"
+              >
+                ⚙️ Configurar Supabase
               </a>
-              <a href="/admin" class="btn-admin">
-                <i class="fas fa-cog"></i>
-                Administración
-              </a>
             </div>
-          </div>
-        </div>
-      </div>
+          )}
 
-      <div class="container">
-        {/* Filtros y Búsqueda */}
-        <div class="filtros-section">
-          <div class="busqueda-container">
-            <i class="fas fa-search"></i>
-            <input
-              type="text"
-              placeholder="Buscar eventos..."
-              value={busqueda()}
-              onInput={(e) => setBusqueda(e.target.value)}
-              class="busqueda-input"
-            />
-          </div>
-
-          <div class="categorias-filter">
-            <For each={categorias}>
-              {(categoria) => (
-                <button
-                  class={`categoria-btn ${filtroCategoria() === categoria ? 'active' : ''}`}
-                  onClick={() => setFiltroCategoria(categoria)}
-                >
-                  {categoria}
-                </button>
-              )}
-            </For>
-          </div>
-        </div>
-
-        {/* Grid de Eventos Profesional */}
-        <div class="event-grid">
-          <For each={eventosFiltrados()}>
-            {(evento) => (
-              <div class="event-card" onClick={() => abrirModalRegistro(evento)}>
-                <div class="event-image">
-                  <div class="event-icon" style={`background-color: ${obtenerColorEvento(evento.imagen)}`}>
-                    <i class={obtenerIconoEvento(evento.imagen)}></i>
-                  </div>
-                  <div class="event-badge">{evento.categoria}</div>
-                </div>
-                
-                <div class="event-content">
-                  <h3 class="event-title">{evento.titulo}</h3>
-                  
-                  <div class="event-details">
-                    <div class="event-detail-item">
-                      <i class="fas fa-calendar"></i>
-                      <span>{formatearFecha(evento.fecha)}</span>
-                    </div>
-                    <div class="event-detail-item">
-                      <i class="fas fa-clock"></i>
-                      <span>{evento.hora}</span>
-                    </div>
-                    <div class="event-detail-item">
-                      <i class="fas fa-map-marker-alt"></i>
-                      <span>{evento.ubicacion}</span>
-                    </div>
-                  </div>
-
-                  <div class="event-price">
-                    <i class="fas fa-ticket-alt"></i> {evento.precio}
-                  </div>
-
-                  <div class="event-availability">
-                    <div class="availability-text">
-                      <span class="cupos-disponibles">{evento.cuposDisponibles}</span> cupos disponibles
-                      de <span class="cupos-total">{evento.cuposTotal}</span>
-                    </div>
-                    <div class="availability-bar">
-                      <div 
-                        class="availability-progress"
-                        style={`width: ${calcularPorcentajeOcupacion(evento.cuposDisponibles, evento.cuposTotal)}%`}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </For>
-        </div>
-
-        {/* Mensaje si no hay eventos */}
-        {eventosFiltrados().length === 0 && (
-          <div class="no-eventos">
-            <i class="fas fa-calendar-times"></i>
-            <h3>No se encontraron eventos</h3>
-            <p>Intenta cambiar los filtros o la búsqueda</p>
-          </div>
-        )}
-      </div>
-
-      {/* Modal Moderno */}
-      {modalAbierto() && (
-        <div class={`modal-overlay ${modalAbierto() ? 'modal-open' : ''}`} onClick={cerrarModal}>
-          <div class={`modal-container ${modalAbierto() ? 'modal-slide-up' : ''}`} onClick={(e) => e.stopPropagation()}>
-            {eventoSeleccionado() && (
-              <div class="modal-content">
-                {/* Header del Modal */}
-                <div class="modal-header">
-                  <button class="modal-close" onClick={cerrarModal}>
-                    <i class="fas fa-times"></i>
-                  </button>
-                </div>
-
-                {/* Imagen del Evento */}
-                <div class="modal-image">
-                  <div class="modal-icon" style={`background-color: ${obtenerColorEvento(eventoSeleccionado().imagen)}`}>
-                    <i class={obtenerIconoEvento(eventoSeleccionado().imagen)}></i>
-                  </div>
-                  <div class="modal-categoria">{eventoSeleccionado().categoria}</div>
-                </div>
-
-                {/* Contenido del Modal */}
-                <div class="modal-body">
-                  <h2 class="modal-title">{eventoSeleccionado().titulo}</h2>
-                  
-                  <div class="modal-detalles">
-                    <div class="detalle-item">
-                      <i class="fas fa-calendar-alt"></i>
-                      <span>{formatearFecha(eventoSeleccionado().fecha)}</span>
-                    </div>
-                    <div class="detalle-item">
-                      <i class="fas fa-clock"></i>
-                      <span>{eventoSeleccionado().hora}</span>
-                    </div>
-                    <div class="detalle-item">
-                      <i class="fas fa-map-marker-alt"></i>
-                      <span>{eventoSeleccionado().ubicacion}</span>
-                    </div>
-                    <div class="detalle-item">
-                      <i class="fas fa-ticket-alt"></i>
-                      <span>{eventoSeleccionado().precio}</span>
-                    </div>
-                  </div>
-
-                  <p class="modal-descripcion">{eventoSeleccionado().descripcion}</p>
-
-                  <div class="modal-cupos">
-                    <div class="cupos-info">
-                      <div class="cupos-text">
-                        <span class="cupos-disponibles">{eventoSeleccionado().cuposDisponibles}</span> cupos disponibles
-                        de <span class="cupos-total">{eventoSeleccionado().cuposTotal}</span>
-                      </div>
-                      <div class="cupos-barra">
-                        <div 
-                          class="cupos-progreso"
-                          style={`width: ${calcularPorcentajeOcupacion(eventoSeleccionado().cuposDisponibles, eventoSeleccionado().cuposTotal)}%`}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="modal-acciones">
-                    <button class="btn-modal-registrarse" onClick={() => { cerrarModal(); abrirModalRegistro(eventoSeleccionado()); }}>
-                      <i class="fas fa-user-plus"></i>
-                      Registrarse al Evento
-                    </button>
-                    <button class="btn-modal-cerrar" onClick={cerrarModal}>
-                      Cerrar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Registro */}
-      {modalRegistroAbierto() && (
-        <div class={`modal-overlay ${modalRegistroAbierto() ? 'modal-open' : ''}`} onClick={cerrarModalRegistro}>
-          <div class={`modal-container ${modalRegistroAbierto() ? 'modal-slide-up' : ''}`} onClick={(e) => e.stopPropagation()}>
-            {eventoParaRegistro() && (
-              <div class="modal-content">
-                {/* Header del Modal */}
-                <div class="modal-header">
-                  <h3 class="modal-header-title">Registro de Visitante</h3>
-                  <button class="modal-close" onClick={cerrarModalRegistro}>
-                    <i class="fas fa-times"></i>
-                  </button>
-                </div>
-
-                {/* Info del Evento */}
-                <div class="modal-evento-info">
-                  <div class="evento-info-icon" style={`background-color: ${obtenerColorEvento(eventoParaRegistro().imagen)}`}>
-                    <i class={obtenerIconoEvento(eventoParaRegistro().imagen)}></i>
-                  </div>
-                  <div class="evento-info-content">
-                    <h4>{eventoParaRegistro().titulo}</h4>
-                    <div class="evento-info-detalles">
-                      <span><i class="fas fa-calendar-alt"></i> {formatearFecha(eventoParaRegistro().fecha)}</span>
-                      <span><i class="fas fa-clock"></i> {eventoParaRegistro().hora}</span>
-                      <span><i class="fas fa-map-marker-alt"></i> {eventoParaRegistro().ubicacion}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Formulario de Registro */}
-                <form onSubmit={handleSubmitRegistro} class="modal-form">
-                  <div class="form-group">
-                    <label for="modal-nombre">Nombre *</label>
-                    <input
-                      type="text"
-                      id="modal-nombre"
-                      value={formData().nombre}
-                      onInput={(e) => handleInputChange('nombre', e.target.value)}
-                      placeholder="Ingresa tu nombre"
-                      required
-                    />
-                  </div>
-
-                  <div class="form-group">
-                    <label for="modal-apellido">Apellido *</label>
-                    <input
-                      type="text"
-                      id="modal-apellido"
-                      value={formData().apellido}
-                      onInput={(e) => handleInputChange('apellido', e.target.value)}
-                      placeholder="Ingresa tu apellido"
-                      required
-                    />
-                  </div>
-
-                  <div class="form-group">
-                    <label for="modal-email">Email *</label>
-                    <input
-                      type="email"
-                      id="modal-email"
-                      value={formData().email}
-                      onInput={(e) => handleInputChange('email', e.target.value)}
-                      placeholder="tu@email.com"
-                      required
-                    />
-                  </div>
-
-                  <div class="form-group">
-                    <label for="modal-telefono">Teléfono *</label>
-                    <input
-                      type="tel"
-                      id="modal-telefono"
-                      value={formData().telefono}
-                      onInput={(e) => handleInputChange('telefono', e.target.value)}
-                      placeholder="(809) 000-0000"
-                      required
-                    />
-                  </div>
-
-                  <div class="modal-acciones-registro">
-                    <button type="button" class="btn-modal-cancelar" onClick={cerrarModalRegistro}>
-                      Cancelar
-                    </button>
-                    <button type="submit" class="btn-modal-confirmar">
-                      <i class="fas fa-check"></i>
-                      Confirmar Registro
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Código de Check-in Directo */}
-      <Show when={modalCodigoAbierto()}>
-        <div class="modal-overlay" onClick={cerrarModalCodigo}>
-          <div class="modal-content codigo-directo-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>¡Check-in Directo!</h3>
-            <div class="codigo-display">
-              <p>Tu código de acceso es:</p>
-              <div class="codigo-grande">
-                {codigoGenerado()}
+          {/* Filtros y búsqueda */}
+          <div class="content-card" style="margin-bottom: 20px;">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Filtros y Búsqueda</h2>
               </div>
             </div>
-            <div class="evento-info">
-              <Show when={eventoParaRegistro()}>
-                <h4>{eventoParaRegistro().titulo}</h4>
-                <p><strong>Fecha:</strong> {eventoParaRegistro().fecha}</p>
-                <p><strong>Hora:</strong> {eventoParaRegistro().hora}</p>
-                <p><strong>Lugar:</strong> {eventoParaRegistro().ubicacion}</p>
-              </Show>
-            </div>
-            <p class="instrucciones">
-              ¡Hola {formData().nombre}! Tu evento está <strong>activo ahora</strong>. 
-              Presenta este código en la entrada para acceder directamente.
-            </p>
-            <div class="modal-buttons">
-              <button type="button" class="btn-confirmar" onClick={confirmarCheckinDirecto}>
-                ✓ Confirmar Check-in
-              </button>
-              <button type="button" class="btn-cancelar" onClick={cerrarModalCodigo}>
-                Cancelar
-              </button>
+            <div style="padding: 20px;">
+              <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; align-items: end;">
+                <div>
+                  <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Buscar eventos:</label>
+                  <input
+                    type="text"
+                    placeholder="Buscar por título o descripción..."
+                    value={searchTerm()}
+                    onInput={(e) => setSearchTerm(e.target.value)}
+                    style="width: 100%; padding: 10px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 14px;"
+                  />
+                </div>
+                <div>
+                  <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Categoría:</label>
+                  <select
+                    value={filterCategory()}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    style="width: 100%; padding: 10px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 14px;"
+                  >
+                    <option value="todas">Todas las categorías</option>
+                    <option value="concierto">Conciertos</option>
+                    <option value="teatro">Teatro</option>
+                    <option value="exposicion">Exposiciones</option>
+                    <option value="taller">Talleres</option>
+                    <option value="conferencia">Conferencias</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Estado:</label>
+                  <select
+                    value={filterStatus()}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    style="width: 100%; padding: 10px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 14px;"
+                  >
+                    <option value="todos">Todos los estados</option>
+                    <option value="activo">Activos</option>
+                    <option value="borrador">Borradores</option>
+                    <option value="cancelado">Cancelados</option>
+                    <option value="finalizado">Finalizados</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* Lista de eventos */}
+          <div class="content-card">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">Lista de Eventos ({filteredEventos().length})</h2>
+                <p class="card-subtitle">Gestiona todos los eventos del centro cultural</p>
+              </div>
+            </div>
+            
+            <Show when={isLoading()}>
+              <div style="padding: 40px; text-align: center; color: #6B7280;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 10px;"></i>
+                <p>Cargando eventos...</p>
+              </div>
+            </Show>
+
+            <Show when={!isLoading() && filteredEventos().length === 0}>
+              <div style="padding: 40px; text-align: center; color: #6B7280;">
+                <i class="fas fa-calendar-times" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                <h3 style="margin: 0 0 10px 0; color: #374151;">No hay eventos</h3>
+                <p style="margin: 0;">No se encontraron eventos que coincidan con los filtros aplicados.</p>
+              </div>
+            </Show>
+
+            <Show when={!isLoading() && filteredEventos().length > 0}>
+              <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                  <thead>
+                    <tr style="background: #F9FAFB; border-bottom: 1px solid #E5E7EB;">
+                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Evento</th>
+                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Categoría</th>
+                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Fecha</th>
+                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Capacidad</th>
+                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Registrados</th>
+                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Estado</th>
+                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={filteredEventos()}>
+                      {(evento) => (
+                        <tr style="border-bottom: 1px solid #E5E7EB; hover:background-color: #F9FAFB;">
+                          <td style="padding: 12px;">
+                            <div>
+                              <div style="font-weight: 500; color: #111827; margin-bottom: 2px;">{evento.titulo}</div>
+                              <div style="font-size: 12px; color: #6B7280; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                {evento.descripcion}
+                              </div>
+                            </div>
+                          </td>
+                          <td style="padding: 12px;">
+                            <span style="background: #E0E7FF; color: #3730A3; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">
+                              {evento.categoria}
+                            </span>
+                          </td>
+                          <td style="padding: 12px; color: #374151;">
+                            {formatDate(evento.fecha)}
+                          </td>
+                          <td style="padding: 12px; color: #374151;">
+                            {evento.capacidad}
+                          </td>
+                          <td style="padding: 12px; color: #374151;">
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                              <span>{evento.registrados}</span>
+                              <div style="width: 60px; height: 4px; background: #E5E7EB; border-radius: 2px; overflow: hidden;">
+                                <div 
+                                  style={`width: ${Math.min((evento.registrados / evento.capacidad) * 100, 100)}%; height: 100%; background: ${(evento.registrados / evento.capacidad) > 0.8 ? '#EF4444' : (evento.registrados / evento.capacidad) > 0.6 ? '#F59E0B' : '#10B981'}; transition: width 0.3s ease;`}
+                                ></div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style="padding: 12px;">
+                            <span style={`background: ${getStatusColor(evento.estado)}20; color: ${getStatusColor(evento.estado)}; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;`}>
+                              {evento.estado}
+                            </span>
+                          </td>
+                          <td style="padding: 12px;">
+                            <div style="display: flex; gap: 8px;">
+                              <button style="background: #3B82F6; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                <i class="fas fa-edit"></i>
+                              </button>
+                              <button style="background: #10B981; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                <i class="fas fa-users"></i>
+                              </button>
+                              <button style="background: #EF4444; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                <i class="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
+            </Show>
+          </div>
         </div>
-      </Show>
+      </main>
     </div>
   );
-}
+};
+
+export default Eventos;
