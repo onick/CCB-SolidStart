@@ -1,0 +1,486 @@
+import { Component, createEffect, createSignal, onMount, Show } from 'solid-js';
+import '../styles/admin.css';
+
+const Admin: Component = () => {
+  const [isAuthenticated, setIsAuthenticated] = createSignal(false);
+  const [username, setUsername] = createSignal('');
+  const [password, setPassword] = createSignal('');
+  const [error, setError] = createSignal('');
+  const [isLoading, setIsLoading] = createSignal(false);
+
+  // Efecto que escucha los cambios de autenticación
+  createEffect(() => {
+    console.log('🔄 Efecto reactivo - isAuthenticated cambió a:', isAuthenticated());
+  });
+
+  // Verificar si ya está autenticado
+  onMount(() => {
+    console.log('Admin: Verificando autenticación...');
+    const authStatus = localStorage.getItem('admin_authenticated');
+    console.log('Estado de autenticación:', authStatus);
+    
+    // Modo de test - bypass automático (SOLO para development)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('test') === 'true') {
+      console.log('🧪 Modo de test activado - bypass de login');
+      setIsAuthenticated(true);
+      localStorage.setItem('admin_authenticated', 'true');
+      return;
+    }
+    
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+    }
+  });
+
+  const handleLogin = async (e: Event) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    
+    console.log('Intentando login con:', { username: username(), password: password() });
+    
+    // Pequeño delay para simular autenticación
+    setTimeout(() => {
+      // Credenciales simples para demo
+      if (username() === 'admin' && password() === 'admin123') {
+        console.log('Login exitoso');
+        
+        // Limpiar error PRIMERO
+        setError('');
+        
+        // Guardar en localStorage
+        localStorage.setItem('admin_authenticated', 'true');
+        
+        // Actualizar estado de autenticación ÚLTIMO para triggear re-render
+        console.log('🔧 Cambiando isAuthenticated de', isAuthenticated(), 'a true');
+        setIsAuthenticated(true);
+        
+        console.log('🔧 Estado después del cambio:', isAuthenticated());
+        
+      } else {
+        console.log('Credenciales incorrectas');
+        setError('Credenciales incorrectas. Usa: admin / admin123');
+        setIsAuthenticated(false);
+      }
+      setIsLoading(false);
+    }, 500);
+  };
+
+  const handleLogout = () => {
+    console.log('Cerrando sesión...');
+    setIsAuthenticated(false);
+    localStorage.removeItem('admin_authenticated');
+    setUsername('');
+    setPassword('');
+    setError('');
+  };
+
+  // Función para login rápido (demo)
+  const quickLogin = () => {
+    console.log('🚀 Quick login iniciado');
+    setUsername('admin');
+    setPassword('admin123');
+    setError('');
+    
+    // Auto-submit después de un pequeño delay
+    setTimeout(() => {
+      const form = document.querySelector('.login-form') as HTMLFormElement;
+      if (form) {
+        console.log('🚀 Ejecutando auto-submit');
+        form.requestSubmit();
+      }
+    }, 100);
+  };
+
+  // Renderizado principal con lógica explícita
+  const renderContent = () => {
+    const authState = isAuthenticated();
+    console.log('🎯 renderContent llamado - authState:', authState);
+    
+    if (!authState) {
+      console.log('🔍 Renderizando pantalla de LOGIN - isAuthenticated:', authState);
+      return renderLoginScreen();
+    } else {
+      console.log('✅ Renderizando PANEL PRINCIPAL - isAuthenticated:', authState);
+      return renderAdminPanel();
+    }
+  };
+
+  const renderLoginScreen = () => {
+    console.log('🔍 renderLoginScreen() ejecutada');
+    return (
+      <div class="admin-login">
+        <div class="login-container">
+          <div class="login-header">
+            <img src="/images/logo.png" alt="CCB" class="login-logo" />
+            <h2>Panel de Administración</h2>
+            <p>Centro Cultural Banreservas</p>
+          </div>
+          
+          <form onSubmit={handleLogin} class="login-form">
+            <div class="form-group">
+              <label for="username">Usuario:</label>
+              <input
+                type="text"
+                id="username"
+                value={username()}
+                onInput={(e) => setUsername(e.target.value)}
+                placeholder="Ingresa tu usuario"
+                disabled={isLoading()}
+                required
+              />
+            </div>
+            
+            <div class="form-group">
+              <label for="password">Contraseña:</label>
+              <input
+                type="password"
+                id="password"
+                value={password()}
+                onInput={(e) => setPassword(e.target.value)}
+                placeholder="Ingresa tu contraseña"
+                disabled={isLoading()}
+                required
+              />
+            </div>
+            
+            {error() && <div class="error-message">{error()}</div>}
+            
+            <button 
+              type="submit" 
+              class="btn-login"
+              disabled={isLoading()}
+            >
+              {isLoading() ? 'Iniciando...' : 'Iniciar Sesión'}
+            </button>
+          </form>
+          
+          <div class="login-footer">
+            <div class="demo-credentials">
+              <p><strong>Credenciales de demo:</strong></p>
+              <div class="credentials-box">
+                <p><strong>Usuario:</strong> admin</p>
+                <p><strong>Contraseña:</strong> admin123</p>
+                <button 
+                  type="button" 
+                  class="btn-quick-login"
+                  onclick={quickLogin}
+                  disabled={isLoading()}
+                >
+                  🚀 Login Rápido
+                </button>
+              </div>
+              
+              <div style="margin-top: 15px; font-size: 11px; color: #999;">
+                <p>🔍 Debug info:</p>
+                <p>Usuario actual: "{username()}"</p>
+                <p>Contraseña actual: "{password()}"</p>
+                <p>Estado: {isLoading() ? 'Cargando...' : 'Listo'}</p>
+                {error() && <p style="color: #dc3545;">❌ {error()}</p>}
+                
+                <div style="margin-top: 10px; padding: 8px; background: #e3f2fd; border-radius: 4px; color: #1565c0;">
+                  <p><strong>🧪 Modo de test:</strong></p>
+                  <p>Para bypass del login, usa:</p>
+                  <code>/admin?test=true</code>
+                </div>
+                
+                <div style="margin-top: 10px;">
+                  <button 
+                    type="button" 
+                    onclick={() => {
+                      console.log('🔧 Forzando refresh del estado');
+                      const currentAuth = localStorage.getItem('admin_authenticated');
+                      console.log('Estado en localStorage:', currentAuth);
+                      if (currentAuth === 'true') {
+                        setIsAuthenticated(true);
+                        console.log('Estado forzado a true');
+                      }
+                    }}
+                    style="background: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer;"
+                  >
+                    🔧 Forzar Refresh Panel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Panel de administración principal
+  const renderAdminPanel = () => {
+    console.log('✅ renderAdminPanel() ejecutada');
+    return (
+      <div class="admin-panel">
+        {/* Sidebar */}
+        <aside class="admin-sidebar">
+          <div class="sidebar-header">
+            <div class="sidebar-logo">
+              <img src="/images/logo.png" alt="CCB" class="sidebar-logo-icon" />
+              <div class="sidebar-brand">
+                <h1>CCB Admin</h1>
+                <p>Centro Cultural</p>
+              </div>
+            </div>
+          </div>
+          
+          <nav class="sidebar-nav">
+            <div class="nav-section">
+              <div class="nav-section-title">Principal</div>
+              <div class="nav-item active">
+                <i class="fas fa-home"></i>
+                <span>Dashboard</span>
+              </div>
+              <div class="nav-item">
+                <i class="fas fa-chart-bar"></i>
+                <span>Reportes</span>
+              </div>
+              <div class="nav-item">
+                <i class="fas fa-cog"></i>
+                <span>Configuración</span>
+              </div>
+            </div>
+            
+            <div class="nav-section">
+              <div class="nav-section-title">Gestionar</div>
+              <div class="nav-item">
+                <i class="fas fa-calendar-alt"></i>
+                <span>Eventos</span>
+              </div>
+              <div class="nav-item">
+                <i class="fas fa-users"></i>
+                <span>Visitantes</span>
+              </div>
+              <div class="nav-item">
+                <i class="fas fa-ticket-alt"></i>
+                <span>Registros</span>
+              </div>
+              <div class="nav-item">
+                <i class="fas fa-tags"></i>
+                <span>Promociones</span>
+              </div>
+            </div>
+            
+            <div class="nav-section">
+              <div class="nav-section-title">Herramientas</div>
+              <div class="nav-item">
+                <i class="fas fa-palette"></i>
+                <span>Diseño Web</span>
+              </div>
+              <div class="nav-item">
+                <i class="fas fa-code"></i>
+                <span>Integraciones</span>
+              </div>
+              <div class="nav-item">
+                <i class="fas fa-download"></i>
+                <span>Exportar</span>
+              </div>
+            </div>
+          </nav>
+        </aside>
+
+        {/* Main Content */}
+        <main class="admin-main">
+          <header class="main-header">
+            <div class="header-left">
+              <div class="breadcrumb">
+                <span>Eventos</span> / <span>Dashboard</span> / Centro Cultural Banreservas
+              </div>
+              <h1 class="main-title">¡Bienvenido de vuelta, Admin! 👋</h1>
+              <p class="main-subtitle">Gestiona todos los aspectos del Centro Cultural Banreservas</p>
+            </div>
+            <div class="header-right">
+              <button class="btn-header btn-secondary">
+                <i class="fas fa-share-alt"></i>
+                Compartir
+              </button>
+              <button class="btn-header btn-primary">
+                <i class="fas fa-plus"></i>
+                Nuevo Evento
+              </button>
+              <button class="btn-header btn-logout" onclick={handleLogout}>
+                <i class="fas fa-sign-out-alt"></i>
+                Cerrar Sesión
+              </button>
+            </div>
+          </header>
+
+          <div class="main-content">
+            {/* Stats Grid */}
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-header">
+                  <div>
+                    <div class="stat-title">Eventos Vendidos</div>
+                  </div>
+                  <div class="stat-icon blue">
+                    <i class="fas fa-shopping-cart"></i>
+                  </div>
+                </div>
+                <div class="stat-number">1,294</div>
+                <div class="stat-label">Registros confirmados</div>
+                <div class="stat-change positive">↗ +12% vs mes anterior</div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-header">
+                  <div>
+                    <div class="stat-title">Visitantes</div>
+                  </div>
+                  <div class="stat-icon purple">
+                    <i class="fas fa-users"></i>
+                  </div>
+                </div>
+                <div class="stat-number">1,185</div>
+                <div class="stat-label">Personas registradas</div>
+                <div class="stat-change positive">↗ +8% vs mes anterior</div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-header">
+                  <div>
+                    <div class="stat-title">Ingresos</div>
+                  </div>
+                  <div class="stat-icon teal">
+                    <i class="fas fa-dollar-sign"></i>
+                  </div>
+                </div>
+                <div class="stat-number">$131.52</div>
+                <div class="stat-label">Donaciones recibidas</div>
+                <div class="stat-change positive">↗ +15% vs mes anterior</div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-header">
+                  <div>
+                    <div class="stat-title">Eventos Activos</div>
+                  </div>
+                  <div class="stat-icon orange">
+                    <i class="fas fa-calendar-check"></i>
+                  </div>
+                </div>
+                <div class="stat-number">723</div>
+                <div class="stat-label">Eventos completados</div>
+                <div class="stat-change positive">↗ +23% vs mes anterior</div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-header">
+                  <div>
+                    <div class="stat-title">Páginas Vistas</div>
+                  </div>
+                  <div class="stat-icon green">
+                    <i class="fas fa-eye"></i>
+                  </div>
+                </div>
+                <div class="stat-number">11,192</div>
+                <div class="stat-label">Vistas totales</div>
+                <div class="stat-change positive">↗ +31% vs mes anterior</div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-header">
+                  <div>
+                    <div class="stat-title">Eventos Populares</div>
+                  </div>
+                  <div class="stat-icon red">
+                    <i class="fas fa-fire"></i>
+                  </div>
+                </div>
+                <div class="stat-number">89</div>
+                <div class="stat-label">Con alta demanda</div>
+                <div class="stat-change positive">↗ +5% vs mes anterior</div>
+              </div>
+            </div>
+
+            {/* Content Grid */}
+            <div class="content-grid">
+              <div class="content-card">
+                <div class="card-header">
+                  <div>
+                    <h2 class="card-title">Registros de Eventos</h2>
+                    <p class="card-subtitle">Feb 14 - Feb 21</p>
+                  </div>
+                </div>
+                <div class="chart-placeholder">
+                  <div>
+                    📊 Aquí iría un gráfico de registros de eventos<br/>
+                    <small>Similar al gráfico "Product Sales" de hi events</small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="content-card">
+                <div class="card-header">
+                  <div>
+                    <h2 class="card-title">Actividad Reciente</h2>
+                  </div>
+                </div>
+                <div class="activity-list">
+                  <div class="activity-item">
+                    <div class="activity-avatar">
+                      <i class="fas fa-user-check"></i>
+                    </div>
+                    <div class="activity-content">
+                      <div class="activity-text"><strong>María González</strong> se registró para "Concierto de Jazz"</div>
+                      <div class="activity-time">Hace 2 horas</div>
+                    </div>
+                  </div>
+                  
+                  <div class="activity-item">
+                    <div class="activity-avatar">
+                      <i class="fas fa-calendar"></i>
+                    </div>
+                    <div class="activity-content">
+                      <div class="activity-text"><strong>Evento creado:</strong> "Exposición de Arte Contemporáneo"</div>
+                      <div class="activity-time">Hace 5 horas</div>
+                    </div>
+                  </div>
+                  
+                  <div class="activity-item">
+                    <div class="activity-avatar">
+                      <i class="fas fa-users"></i>
+                    </div>
+                    <div class="activity-content">
+                      <div class="activity-text"><strong>15 personas</strong> se registraron para "Taller de Fotografía"</div>
+                      <div class="activity-time">Ayer</div>
+                    </div>
+                  </div>
+                  
+                  <div class="activity-item">
+                    <div class="activity-avatar">
+                      <i class="fas fa-star"></i>
+                    </div>
+                    <div class="activity-content">
+                      <div class="activity-text"><strong>Evento destacado:</strong> "Noche de Poesía" alcanzó 100 registros</div>
+                      <div class="activity-time">Hace 2 días</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  };
+
+  // Agregar logging antes del render
+  console.log('🎯 Componente Admin renderizando - isAuthenticated:', isAuthenticated());
+
+  return (
+    <div>
+      <Show
+        when={isAuthenticated()}
+        fallback={renderLoginScreen()}
+      >
+        {renderAdminPanel()}
+      </Show>
+    </div>
+  );
+};
+
+export default Admin;

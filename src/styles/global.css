@@ -1,0 +1,150 @@
+/* Estilos Globales - Centro Cultural Banreservas SolidStart */
+
+/* Paleta de colores del Centro Cultural Banreservas */
+:root {
+  /* Colores principales */
+  --color-primary: #F99D2A;        /* Naranja/Dorado */
+  --color-secondary: #00BDF2;      /* Azul brillante */
+  --color-dark: #474C55;           /* Gris oscuro */
+  
+  /* Variaciones de los colores principales */
+  --color-primary-light: #FDB757;  /* Naranja claro */
+  --color-primary-dark: #E68A1A;   /* Naranja oscuro */
+  
+  --color-secondary-light: #33CDF5; /* Azul claro */
+  --color-secondary-dark: #0099CC;  /* Azul oscuro */
+  
+  --color-dark-light: #5A5F69;     /* Gris medio */
+  --color-dark-lighter: #7A7F88;   /* Gris claro */
+  
+  /* Colores de fondo y texto */
+  --color-background: #FFFFFF;
+  --color-background-light: #F8F9FA;
+  --color-text: #474C55;
+  --color-text-light: #7A7F88;
+  
+  /* Colores de estado */
+  --color-success: #28A745;
+  --color-warning: #F99D2A;        /* Usa el color principal */
+  --color-danger: #DC3545;
+  --color-info: #00BDF2;           /* Usa el color secundario */
+  
+  /* Sombras */
+  --shadow-sm: 0 1px 3px rgba(71, 76, 85, 0.1);
+  --shadow-md: 0 4px 6px rgba(71, 76, 85, 0.1);
+  --shadow-lg: 0 10px 15px rgba(71, 76, 85, 0.1);
+  
+  /* Bordes */
+  --border-radius: 8px;
+  --border-color: #E9ECEF;
+  
+  /* Espaciados */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  
+  /* Tipografía */
+  --font-family: 'Avenir', Helvetica, Arial, sans-serif;
+  --font-size-base: 16px;  --line-height-base: 1.5;
+  
+  /* Transiciones */
+  --transition-fast: 0.2s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+}
+
+/* Reset y Estilos Base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+}
+
+body {
+  font-family: var(--font-family);
+  color: var(--color-text);
+  background-color: var(--color-background-light);
+  overflow-x: hidden;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--color-primary-dark);
+}
+
+/* Títulos */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  margin-bottom: var(--spacing-md);
+  line-height: 1.3;
+}
+
+h1 { font-size: 2.5rem; }
+h2 { font-size: 2rem; }
+h3 { font-size: 1.75rem; }
+h4 { font-size: 1.5rem; }
+h5 { font-size: 1.25rem; }
+h6 { font-size: 1rem; }/* Clases de utilidad para los colores */
+.text-primary { color: var(--color-primary) !important; }
+.text-secondary { color: var(--color-secondary) !important; }
+.text-dark { color: var(--color-dark) !important; }
+
+.bg-primary { background-color: var(--color-primary) !important; }
+.bg-secondary { background-color: var(--color-secondary) !important; }
+.bg-dark { background-color: var(--color-dark) !important; }
+
+/* Botones con la nueva paleta */
+.btn {
+  padding: 12px 24px;
+  border-radius: var(--border-radius);
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all var(--transition-normal);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-dark);
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background-color: var(--color-secondary);
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-secondary-dark);
+  transform: translateY(-2px);
+}
+
+/* Utilidades básicas */
+.text-center { text-align: center; }
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.w-full { width: 100%; }
+.min-h-screen { min-height: 100vh; }
+.rounded-lg { border-radius: 12px; }
+.shadow-lg { box-shadow: var(--shadow-lg); }

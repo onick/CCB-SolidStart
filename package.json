@@ -1,0 +1,31 @@
+{
+  "name": "ccb-solidstart",
+  "version": "1.0.0",
+  "description": "Centro Cultural Banreservas - Sistema de Registro de Visitantes con SolidJS + Vite",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "dependencies": {
+    "@solidjs/router": "^0.14.10",
+    "chart.js": "^4.4.9",
+    "chartjs-adapter-date-fns": "^3.0.0",
+    "date-fns": "^4.1.0",
+    "solid-js": "^1.8.21"
+  },
+  "devDependencies": {
+    "vite": "^5.3.1",
+    "vite-plugin-solid": "^2.11.6"
+  },
+  "keywords": [
+    "solidjs",
+    "vite",
+    "centro-cultural",
+    "kiosk",
+    "visitor-registration"
+  ],
+  "author": "Centro Cultural Banreservas",
+  "license": "MIT"
+}
