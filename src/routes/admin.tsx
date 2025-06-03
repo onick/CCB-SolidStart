@@ -316,10 +316,6 @@ const Admin: Component = () => {
             <div class="nav-section">
               <div class="nav-section-title">Herramientas</div>
               <div class="nav-item">
-                <i class="fas fa-palette"></i>
-                <span>Diseño Web</span>
-              </div>
-              <div class="nav-item">
                 <i class="fas fa-code"></i>
                 <span>Integraciones</span>
               </div>
@@ -573,4 +569,3 @@ const Admin: Component = () => {
 };
 
 export default Admin;
-
