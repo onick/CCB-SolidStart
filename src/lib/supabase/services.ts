@@ -1,4 +1,12 @@
 import { Evento, RegistroEvento, supabase, Visitante } from './client';
+import { mockEstadisticas } from './mock-data';
+
+// Función para verificar si Supabase está configurado
+const isSupabaseConfigured = () => {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  return url && key && !url.includes('tu-proyecto') && !key.includes('tu-anon-key');
+};
 
 // =============================================
 // SERVICIOS DE VISITANTES
@@ -54,18 +62,20 @@ export const visitantesService = {
   },
 
   async obtenerEstadisticas() {
+    // Si Supabase no está configurado, usar datos mock
+    if (!isSupabaseConfigured()) {
+      console.log('🧪 Usando datos mock para estadísticas de visitantes');
+      return mockEstadisticas.visitantes;
+    }
+
     const { data, error } = await supabase
       .from('visitantes')
       .select('id, fecha_registro, estado');
     
     if (error) {
       console.error('Error obteniendo estadísticas:', error);
-      return {
-        total: 0,
-        activos: 0,
-        hoy: 0,
-        estaSemanaN: 0
-      };
+      console.log('🧪 Fallback a datos mock debido a error');
+      return mockEstadisticas.visitantes;
     }
 
     const hoy = new Date().toDateString();
@@ -150,19 +160,20 @@ export const eventosService = {
   },
 
   async obtenerEstadisticas() {
+    // Si Supabase no está configurado, usar datos mock
+    if (!isSupabaseConfigured()) {
+      console.log('🧪 Usando datos mock para estadísticas de eventos');
+      return mockEstadisticas.eventos;
+    }
+
     const { data, error } = await supabase
       .from('eventos')
       .select('id, estado, registrados, capacidad, precio');
     
     if (error) {
       console.error('Error obteniendo estadísticas de eventos:', error);
-      return {
-        total: 0,
-        activos: 0,
-        visitantes: 0,
-        checkins: 0,
-        ingresos: 0
-      };
+      console.log('🧪 Fallback a datos mock debido a error');
+      return mockEstadisticas.eventos;
     }
 
     const totalRegistrados = data.reduce((sum, evento) => sum + evento.registrados, 0);

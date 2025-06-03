@@ -3,6 +3,7 @@ import { Component, createSignal } from 'solid-js';
 import './App.css';
 import Admin from './routes/admin';
 import Eventos from './routes/eventos';
+import SetupSupabase from './routes/setup-supabase';
 
 const App: Component = () => {
   return (
@@ -11,6 +12,7 @@ const App: Component = () => {
         <Route path="/" component={Home} />
         <Route path="/eventos" component={Eventos} />
         <Route path="/admin" component={Admin} />
+        <Route path="/setup-supabase" component={SetupSupabase} />
         <Route path="/registro" component={Registro} />
         <Route path="/visitantes" component={Visitantes} />
       </Route>

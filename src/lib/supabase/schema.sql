@@ -209,7 +209,7 @@ SELECT
 CREATE VIEW eventos_populares AS
 SELECT 
     e.*,
-    ROUND((e.registrados::float / e.capacidad) * 100, 2) as porcentaje_ocupacion
+    ROUND((e.registrados::numeric / e.capacidad::numeric) * 100, 2) as porcentaje_ocupacion
 FROM eventos e
 WHERE e.registrados > 0
 ORDER BY porcentaje_ocupacion DESC; 

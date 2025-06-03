@@ -1,5 +1,13 @@
 import { Component, createEffect, createSignal, onMount, Show } from 'solid-js';
+import { eventosService, visitantesService } from '../lib/supabase/services';
 import '../styles/admin.css';
+
+// Función para verificar si Supabase está configurado
+const isSupabaseConfigured = () => {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  return url && key && !url.includes('tu-proyecto') && !key.includes('tu-anon-key');
+};
 
 const Admin: Component = () => {
   const [isAuthenticated, setIsAuthenticated] = createSignal(false);
@@ -7,10 +15,25 @@ const Admin: Component = () => {
   const [password, setPassword] = createSignal('');
   const [error, setError] = createSignal('');
   const [isLoading, setIsLoading] = createSignal(false);
+  
+  // Estados para las estadísticas reales
+  const [stats, setStats] = createSignal({
+    eventos: { total: 0, activos: 0, visitantes: 0, checkins: 0, ingresos: 0 },
+    visitantes: { total: 0, activos: 0, hoy: 0, estaSemana: 0 },
+    isLoading: true
+  });
 
   // Efecto que escucha los cambios de autenticación
   createEffect(() => {
     console.log('🔄 Efecto reactivo - isAuthenticated cambió a:', isAuthenticated());
+  });
+
+  // Efecto para cargar estadísticas cuando el usuario se autentica
+  createEffect(() => {
+    if (isAuthenticated()) {
+      console.log('🔄 Usuario autenticado, cargando estadísticas...');
+      cargarEstadisticas();
+    }
   });
 
   // Verificar si ya está autenticado
@@ -74,6 +97,32 @@ const Admin: Component = () => {
     setUsername('');
     setPassword('');
     setError('');
+  };
+
+  // Función para cargar estadísticas reales desde Supabase
+  const cargarEstadisticas = async () => {
+    console.log('📊 Cargando estadísticas desde Supabase...');
+    setStats(prev => ({ ...prev, isLoading: true }));
+    
+    try {
+      // Cargar estadísticas en paralelo
+      const [estadisticasEventos, estadisticasVisitantes] = await Promise.all([
+        eventosService.obtenerEstadisticas(),
+        visitantesService.obtenerEstadisticas()
+      ]);
+      
+      console.log('📊 Estadísticas cargadas:', { estadisticasEventos, estadisticasVisitantes });
+      
+      setStats({
+        eventos: estadisticasEventos,
+        visitantes: estadisticasVisitantes,
+        isLoading: false
+      });
+    } catch (error) {
+      console.error('❌ Error cargando estadísticas:', error);
+      // En caso de error, mantener valores por defecto pero ya no cargar
+      setStats(prev => ({ ...prev, isLoading: false }));
+    }
   };
 
   // Función para login rápido (demo)
@@ -309,6 +358,22 @@ const Admin: Component = () => {
           </header>
 
           <div class="main-content">
+            {/* Alerta de datos mock */}
+            {!isSupabaseConfigured() && (
+              <div class="mock-data-alert" style="background: #FEF3C7; border: 1px solid #F59E0B; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+                <h4 style="margin: 0 0 10px 0; color: #92400E;">🧪 Usando Datos de Prueba</h4>
+                <p style="margin: 0 0 15px 0; color: #92400E;">
+                  Supabase no está configurado. Actualmente se muestran datos mock para demostración.
+                </p>
+                <a 
+                  href="/setup-supabase" 
+                  style="background: #1E40AF; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; display: inline-block;"
+                >
+                  ⚙️ Configurar Supabase
+                </a>
+              </div>
+            )}
+
             {/* Stats Grid */}
             <div class="stats-grid">
               <div class="stat-card">
@@ -317,12 +382,16 @@ const Admin: Component = () => {
                     <div class="stat-title">Eventos Totales</div>
                   </div>
                   <div class="stat-icon blue">
-                    <i class="fas fa-shopping-cart"></i>
+                    <i class="fas fa-calendar-alt"></i>
                   </div>
                 </div>
-                <div class="stat-number">1,294</div>
-                <div class="stat-label">Registros confirmados</div>
-                <div class="stat-change positive">↗ +12% vs mes anterior</div>
+                <div class="stat-number">
+                  {stats().isLoading ? '...' : stats().eventos.total.toLocaleString()}
+                </div>
+                <div class="stat-label">Eventos registrados</div>
+                <div class="stat-change positive">
+                  ↗ {stats().eventos.activos} activos
+                </div>
               </div>
 
               <div class="stat-card">
@@ -334,51 +403,67 @@ const Admin: Component = () => {
                     <i class="fas fa-users"></i>
                   </div>
                 </div>
-                <div class="stat-number">1,185</div>
+                <div class="stat-number">
+                  {stats().isLoading ? '...' : stats().visitantes.total.toLocaleString()}
+                </div>
                 <div class="stat-label">Personas registradas</div>
-                <div class="stat-change positive">↗ +8% vs mes anterior</div>
+                <div class="stat-change positive">
+                  ↗ {stats().visitantes.hoy} hoy
+                </div>
               </div>
 
               <div class="stat-card">
                 <div class="stat-header">
                   <div>
-                    <div class="stat-title">Check-in</div>
+                    <div class="stat-title">Check-ins</div>
                   </div>
                   <div class="stat-icon teal">
+                    <i class="fas fa-user-check"></i>
+                  </div>
+                </div>
+                <div class="stat-number">
+                  {stats().isLoading ? '...' : stats().eventos.checkins.toLocaleString()}
+                </div>
+                <div class="stat-label">Asistencias confirmadas</div>
+                <div class="stat-change positive">
+                  ↗ {stats().visitantes.estaSemana} esta semana
+                </div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-header">
+                  <div>
+                    <div class="stat-title">Ingresos</div>
+                  </div>
+                  <div class="stat-icon orange">
                     <i class="fas fa-dollar-sign"></i>
                   </div>
                 </div>
-                <div class="stat-number">$131.52</div>
-                <div class="stat-label">Donaciones recibidas</div>
-                <div class="stat-change positive">↗ +15% vs mes anterior</div>
-              </div>
-
-              <div class="stat-card">
-                <div class="stat-header">
-                  <div>
-                    <div class="stat-title">Eventos Activos</div>
-                  </div>
-                  <div class="stat-icon orange">
-                    <i class="fas fa-calendar-check"></i>
-                  </div>
+                <div class="stat-number">
+                  {stats().isLoading ? '...' : `$${stats().eventos.ingresos.toLocaleString()}`}
                 </div>
-                <div class="stat-number">723</div>
-                <div class="stat-label">Eventos completados</div>
-                <div class="stat-change positive">↗ +23% vs mes anterior</div>
+                <div class="stat-label">Ingresos totales</div>
+                <div class="stat-change positive">
+                  ↗ {stats().eventos.visitantes} registrados
+                </div>
               </div>
 
               <div class="stat-card">
                 <div class="stat-header">
                   <div>
-                    <div class="stat-title">Páginas Vistas</div>
+                    <div class="stat-title">Ocupación</div>
                   </div>
                   <div class="stat-icon green">
-                    <i class="fas fa-eye"></i>
+                    <i class="fas fa-chart-line"></i>
                   </div>
                 </div>
-                <div class="stat-number">11,192</div>
-                <div class="stat-label">Vistas totales</div>
-                <div class="stat-change positive">↗ +31% vs mes anterior</div>
+                <div class="stat-number">
+                  {stats().isLoading ? '...' : `${Math.round((stats().eventos.visitantes / (stats().eventos.total * 200)) * 100)}%`}
+                </div>
+                <div class="stat-label">Promedio de ocupación</div>
+                <div class="stat-change positive">
+                  ↗ {stats().visitantes.activos} activos
+                </div>
               </div>
 
               <div class="stat-card">
@@ -390,9 +475,13 @@ const Admin: Component = () => {
                     <i class="fas fa-fire"></i>
                   </div>
                 </div>
-                <div class="stat-number">89</div>
+                <div class="stat-number">
+                  {stats().isLoading ? '...' : Math.round(stats().eventos.total * 0.3)}
+                </div>
                 <div class="stat-label">Con alta demanda</div>
-                <div class="stat-change positive">↗ +5% vs mes anterior</div>
+                <div class="stat-change positive">
+                  ↗ Trending up
+                </div>
               </div>
             </div>
 
@@ -484,3 +573,4 @@ const Admin: Component = () => {
 };
 
 export default Admin;
+

@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Configuración de Supabase - cambiar por tus credenciales reales
-const supabaseUrl = 'https://tu-proyecto.supabase.co';
-const supabaseAnonKey = 'tu-anon-key-aqui';
+// Configuración de Supabase usando variables de entorno
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tu-proyecto.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'tu-anon-key-aqui';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
