@@ -3,6 +3,7 @@ import { Component, createSignal } from 'solid-js';
 import './App.css';
 import Admin from './routes/admin';
 import Eventos from './routes/eventos';
+import EventosPublicos from './routes/eventos-publicos';
 import SetupSupabase from './routes/setup-supabase';
 
 const App: Component = () => {
@@ -11,6 +12,7 @@ const App: Component = () => {
       <Route path="/" component={Layout}>
         <Route path="/" component={Home} />
         <Route path="/eventos" component={Eventos} />
+        <Route path="/eventos-publicos" component={EventosPublicos} />
         <Route path="/admin" component={Admin} />
         <Route path="/setup-supabase" component={SetupSupabase} />
         <Route path="/registro" component={Registro} />
@@ -52,7 +54,7 @@ const Home: Component = () => {
       </div>
       
       <div class="main-actions">
-        <div class="action-card" onclick={() => window.location.href = '/eventos'}>
+        <div class="action-card" onclick={() => window.location.href = '/eventos-publicos'}>
           <div class="action-icon">
             <i class="fas fa-calendar-alt"></i>
           </div>

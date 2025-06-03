@@ -20,7 +20,7 @@ export default function Home() {
             icon="fas fa-calendar-alt"
             title="Ver Eventos"
             description="Explore nuestros eventos actuales y próximos"
-            onClick={() => navigate("/eventos")}
+            onClick={() => navigate("/eventos-publicos")}
           />
           <WelcomeCard
             icon="fas fa-user-plus"
