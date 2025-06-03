@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@solidjs/router": "^0.14.10",
+    "@supabase/supabase-js": "^2.49.9",
     "chart.js": "^4.4.9",
     "chartjs-adapter-date-fns": "^3.0.0",
     "date-fns": "^4.1.0",
