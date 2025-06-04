@@ -151,8 +151,12 @@ const EventosPublicos: Component = () => {
           </div>
           <span style="color: white; font-size: 1.1rem; font-weight: 600;">Centro Cultural Banreservas</span>
         </div>
+        
+        <div style="position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center;">
+          <span style="color: white; font-size: 1.8rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.2); letter-spacing: 0.5px;">Próximas actividades</span>
+        </div>
+        
         <div style="display: flex; align-items: center; gap: 2rem;">
-          <span style="color: white; font-size: 1.1rem; font-weight: 600;">Eventos</span>
           <button 
             onclick={recargarEventos}
             style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;"
@@ -301,6 +305,64 @@ const EventosPublicos: Component = () => {
                 const dateInfo = formatDate(evento.fecha);
                 const statusInfo = getEventStatus(evento);
                 
+                // Función para obtener el estilo de la categoría del evento
+                const getCategoryStyle = (titulo: string) => {
+                  const tituloLower = titulo.toLowerCase();
+                  
+                  if (tituloLower.includes('concierto') || tituloLower.includes('música') || tituloLower.includes('jazz')) {
+                    return { 
+                      bg: 'linear-gradient(135deg, #06B6D4, #0891B2)', 
+                      icon: '🎵', 
+                      label: 'MÚSICA',
+                      labelColor: '#06B6D4'
+                    };
+                  } else if (tituloLower.includes('exposición') || tituloLower.includes('arte') || tituloLower.includes('galería')) {
+                    return { 
+                      bg: 'linear-gradient(135deg, #F59E0B, #D97706)', 
+                      icon: '🎨', 
+                      label: 'ARTE VISUAL',
+                      labelColor: '#F59E0B'
+                    };
+                  } else if (tituloLower.includes('teatro') || tituloLower.includes('obra')) {
+                    return { 
+                      bg: 'linear-gradient(135deg, #8B5CF6, #7C3AED)', 
+                      icon: '🎭', 
+                      label: 'TEATRO',
+                      labelColor: '#8B5CF6'
+                    };
+                  } else if (tituloLower.includes('taller') || tituloLower.includes('cerámica') || tituloLower.includes('fotografía')) {
+                    return { 
+                      bg: 'linear-gradient(135deg, #EF4444, #DC2626)', 
+                      icon: '🛠️', 
+                      label: 'TALLER',
+                      labelColor: '#EF4444'
+                    };
+                  } else if (tituloLower.includes('conferencia') || tituloLower.includes('historia')) {
+                    return { 
+                      bg: 'linear-gradient(135deg, #10B981, #059669)', 
+                      icon: '🎤', 
+                      label: 'CONFERENCIA',
+                      labelColor: '#10B981'
+                    };
+                  } else if (tituloLower.includes('festival') || tituloLower.includes('danza') || tituloLower.includes('literatura')) {
+                    return { 
+                      bg: 'linear-gradient(135deg, #8B5CF6, #7C3AED)', 
+                      icon: '📚', 
+                      label: 'LITERATURA',
+                      labelColor: '#8B5CF6'
+                    };
+                  } else {
+                    return { 
+                      bg: 'linear-gradient(135deg, #6B7280, #4B5563)', 
+                      icon: '🎪', 
+                      label: 'EVENTO',
+                      labelColor: '#6B7280'
+                    };
+                  }
+                };
+                
+                const categoryStyle = getCategoryStyle(evento.titulo);
+                
                 return (
                   <div 
                     style="background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 25px rgba(0,0,0,0.1); border: none; cursor: pointer; transition: all 0.3s ease; width: 100%;"
@@ -314,58 +376,69 @@ const EventosPublicos: Component = () => {
                       (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
                     }}
                   >
-                    {/* Header con degradado morado */}
-                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem; position: relative; overflow: hidden;">
-                      {/* Círculos decorativos */}
-                      <div style="position: absolute; top: -30px; left: -30px; width: 80px; height: 80px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
-                      <div style="position: absolute; top: 50px; right: -20px; width: 60px; height: 60px; background: rgba(255,255,255,0.08); border-radius: 50%;"></div>
-                      <div style="position: absolute; bottom: -40px; left: 100px; width: 100px; height: 100px; background: rgba(255,255,255,0.05); border-radius: 50%;"></div>
-                      
-                      {/* Status badge */}
-                      <div style="position: absolute; top: 1rem; right: 1rem;">
-                        <span 
-                          style={`padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; color: white; background: ${statusInfo.status === 'ACTIVO' ? '#10B981' : statusInfo.status === 'PRÓXIMO' ? '#F59E0B' : '#6B7280'};`}
-                        >
-                          {statusInfo.status}
+                    {/* Header con color de categoría e icono */}
+                    <div style={`background: ${categoryStyle.bg}; padding: 2.5rem; position: relative; min-height: 160px; display: flex; align-items: center; justify-content: center;`}>
+                      {/* Etiqueta de categoría */}
+                      <div style="position: absolute; top: 1rem; left: 1rem;">
+                        <span style="background: rgba(255,255,255,0.9); color: #374151; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px;">
+                          {categoryStyle.label}
                         </span>
                       </div>
                       
-                      {/* Título */}
-                      <h3 style="color: white; font-size: 1.4rem; font-weight: 700; margin: 0; text-align: center; line-height: 1.3; position: relative; z-index: 2;">
-                        {evento.titulo}
-                      </h3>
+                      {/* Status badge */}
+                      <div style="position: absolute; top: 1rem; right: 1rem;">
+                        <span style="background: rgba(255,255,255,0.9); color: #6B7280; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600;">
+                          Finalizado
+                        </span>
+                      </div>
+                      
+                      {/* Icono central */}
+                      <div style="font-size: 3rem; opacity: 0.9;">
+                        {categoryStyle.icon}
+                      </div>
                     </div>
 
-                    {/* Contenido inferior */}
-                    <div style="padding: 1.5rem;">
+                    {/* Contenido de la tarjeta */}
+                    <div style="padding: 2rem;">
+                      {/* Título */}
+                      <h3 style="color: #1F2937; font-size: 1.1rem; font-weight: 600; margin: 0 0 1rem 0; line-height: 1.4;">
+                        {evento.titulo}
+                      </h3>
+
                       {/* Información del evento */}
-                      <div style="margin-bottom: 1.5rem;">
-                        <div style="color: #374151; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem;">
-                          📅 {dateInfo.day} {dateInfo.month} 2025
+                      <div style="margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                          <span style="color: #F59E0B;">📅</span>
+                          <span style="color: #6B7280; font-size: 0.85rem; font-weight: 500;">sábado, 14 de junio de 2025</span>
                         </div>
-                        <div style="color: #6B7280; font-size: 0.9rem; margin-bottom: 0.5rem;">
-                          📍 {evento.ubicacion}
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                          <span style="color: #F59E0B;">🕐</span>
+                          <span style="color: #6B7280; font-size: 0.85rem;">19:30</span>
                         </div>
-                        <div style="color: #6B7280; font-size: 0.9rem;">
-                          🕐 {formatTime(evento.hora)} - {formatTime(`${parseInt(evento.hora.split(':')[0]) + evento.duracion}:${evento.hora.split(':')[1]}`)}
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                          <span style="color: #F59E0B;">📍</span>
+                          <span style="color: #6B7280; font-size: 0.85rem;">{evento.ubicacion}</span>
                         </div>
                       </div>
 
-                      {/* Estadísticas */}
-                      <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                        <div style="flex: 1; text-align: center;">
-                          <div style="background: #EFF6FF; color: #0EA5E9; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; font-size: 1.5rem; font-weight: bold;">
-                            0
-                          </div>
-                          <div style="color: #6B7280; font-size: 0.8rem; font-weight: 500;">Registrados</div>
-                        </div>
-                        <div style="flex: 1; text-align: center;">
-                          <div style="background: #FEF3E2; color: #F59E0B; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; font-size: 1.5rem; font-weight: bold;">
-                            0
-                          </div>
-                          <div style="color: #6B7280; font-size: 0.8rem; font-weight: 500;">Check-Ins</div>
+                      {/* Precio */}
+                      <div style="margin: 1rem 0;">
+                        <div style="background: #D1FAE5; color: #059669; padding: 0.5rem 1rem; border-radius: 8px; text-align: center; font-weight: 600; font-size: 0.9rem;">
+                          💳 Entrada Libre
                         </div>
                       </div>
+
+                      {/* Disponibilidad */}
+                      <div style="margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6B7280; margin-bottom: 0.3rem;">
+                          <span>150 cupos disponibles de 200</span>
+                        </div>
+                        <div style="background: #F3F4F6; height: 6px; border-radius: 3px; overflow: hidden;">
+                          <div style="background: linear-gradient(90deg, #F59E0B, #F97316); height: 100%; width: 75%; border-radius: 3px;"></div>
+                        </div>
+                      </div>
+
+
                     </div>
                   </div>
                 );
