@@ -295,7 +295,7 @@ const EventosPublicos: Component = () => {
 
         {/* Lista de Eventos */}
         <Show when={!isLoading() && filteredEventos().length > 0}>
-          <div class="eventos-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; max-width: none; padding: 0 1rem;">
+          <div class="eventos-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; max-width: none; padding: 0.75rem;">
             <For each={filteredEventos()}>
               {(evento) => {
                 const dateInfo = formatDate(evento.fecha);
@@ -303,42 +303,67 @@ const EventosPublicos: Component = () => {
                 
                 return (
                   <div 
-                    style="background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #E5E7EB; cursor: pointer; transition: all 0.2s;"
+                    style="background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 25px rgba(0,0,0,0.1); border: none; cursor: pointer; transition: all 0.3s ease; width: 100%;"
                     onclick={() => openRegistroModal(evento)}
                     onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                      (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
+                      (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 35px rgba(0,0,0,0.15)';
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(-5px)';
                     }}
                     onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                      (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 25px rgba(0,0,0,0.1)';
                       (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
                     }}
                   >
-                    <div style="display: flex; gap: 1.5rem; align-items: center;">
+                    {/* Header con degradado morado */}
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem; position: relative; overflow: hidden;">
+                      {/* Círculos decorativos */}
+                      <div style="position: absolute; top: -30px; left: -30px; width: 80px; height: 80px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
+                      <div style="position: absolute; top: 50px; right: -20px; width: 60px; height: 60px; background: rgba(255,255,255,0.08); border-radius: 50%;"></div>
+                      <div style="position: absolute; bottom: -40px; left: 100px; width: 100px; height: 100px; background: rgba(255,255,255,0.05); border-radius: 50%;"></div>
                       
-                      {/* Fecha */}
-                      <div style="background: #0EA5E9; color: white; padding: 1rem; border-radius: 8px; text-align: center; min-width: 80px;">
-                        <div style="font-size: 1.5rem; font-weight: bold; line-height: 1;">{dateInfo.day}</div>
-                        <div style="font-size: 0.9rem; font-weight: 500; opacity: 0.9;">{dateInfo.month}</div>
+                      {/* Status badge */}
+                      <div style="position: absolute; top: 1rem; right: 1rem;">
+                        <span 
+                          style={`padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; color: white; background: ${statusInfo.status === 'ACTIVO' ? '#10B981' : statusInfo.status === 'PRÓXIMO' ? '#F59E0B' : '#6B7280'};`}
+                        >
+                          {statusInfo.status}
+                        </span>
+                      </div>
+                      
+                      {/* Título */}
+                      <h3 style="color: white; font-size: 1.4rem; font-weight: 700; margin: 0; text-align: center; line-height: 1.3; position: relative; z-index: 2;">
+                        {evento.titulo}
+                      </h3>
+                    </div>
+
+                    {/* Contenido inferior */}
+                    <div style="padding: 1.5rem;">
+                      {/* Información del evento */}
+                      <div style="margin-bottom: 1.5rem;">
+                        <div style="color: #374151; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem;">
+                          📅 {dateInfo.day} {dateInfo.month} 2025
+                        </div>
+                        <div style="color: #6B7280; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                          📍 {evento.ubicacion}
+                        </div>
+                        <div style="color: #6B7280; font-size: 0.9rem;">
+                          🕐 {formatTime(evento.hora)} - {formatTime(`${parseInt(evento.hora.split(':')[0]) + evento.duracion}:${evento.hora.split(':')[1]}`)}
+                        </div>
                       </div>
 
-                      {/* Información del Evento */}
-                      <div style="flex: 1;">
-                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
-                          <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #111827;">{evento.titulo}</h3>
-                          <span 
-                            style={`padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 500; color: ${statusInfo.color}; background: ${statusInfo.bgColor};`}
-                          >
-                            {statusInfo.status}
-                          </span>
+                      {/* Estadísticas */}
+                      <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                        <div style="flex: 1; text-align: center;">
+                          <div style="background: #EFF6FF; color: #0EA5E9; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; font-size: 1.5rem; font-weight: bold;">
+                            0
+                          </div>
+                          <div style="color: #6B7280; font-size: 0.8rem; font-weight: 500;">Registrados</div>
                         </div>
-                        
-                        <div style="color: #6B7280; font-size: 0.9rem; margin-bottom: 0.25rem;">
-                          {evento.ubicacion}
-                        </div>
-                        
-                        <div style="color: #6B7280; font-size: 0.9rem;">
-                          {formatTime(evento.hora)} - {formatTime(`${parseInt(evento.hora.split(':')[0]) + evento.duracion}:${evento.hora.split(':')[1]}`)}
+                        <div style="flex: 1; text-align: center;">
+                          <div style="background: #FEF3E2; color: #F59E0B; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; font-size: 1.5rem; font-weight: bold;">
+                            0
+                          </div>
+                          <div style="color: #6B7280; font-size: 0.8rem; font-weight: 500;">Check-Ins</div>
                         </div>
                       </div>
                     </div>
@@ -537,7 +562,7 @@ const EventosPublicos: Component = () => {
 
           @media (min-width: 1025px) {
             .eventos-grid {
-              grid-template-columns: repeat(3, 1fr) !important;
+              grid-template-columns: repeat(5, 1fr) !important;
             }
           }
 
