@@ -100,6 +100,35 @@ const mockEventos: Evento[] = [
 // Variable para almacenar eventos mock dinámicos
 let eventosMockDinamicos: Evento[] = [...mockEventos];
 
+// Función para cargar eventos desde localStorage
+const cargarEventosDelStorage = (): Evento[] => {
+  try {
+    const eventosGuardados = localStorage.getItem('ccb_eventos_mock');
+    if (eventosGuardados) {
+      const eventosParsed = JSON.parse(eventosGuardados);
+      console.log('📦 Eventos cargados desde localStorage:', eventosParsed.length);
+      return eventosParsed;
+    }
+  } catch (error) {
+    console.error('❌ Error cargando eventos del storage:', error);
+  }
+  console.log('🔄 Usando eventos mock por defecto');
+  return [...mockEventos];
+};
+
+// Función para guardar eventos en localStorage
+const guardarEventosEnStorage = (eventos: Evento[]) => {
+  try {
+    localStorage.setItem('ccb_eventos_mock', JSON.stringify(eventos));
+    console.log('💾 Eventos guardados en localStorage:', eventos.length);
+  } catch (error) {
+    console.error('❌ Error guardando eventos en storage:', error);
+  }
+};
+
+// Inicializar eventos desde localStorage
+eventosMockDinamicos = cargarEventosDelStorage();
+
 // =============================================
 // SERVICIOS DE VISITANTES
 // =============================================
@@ -241,7 +270,8 @@ export const eventosService = {
         updated_at: new Date().toISOString()
       };
       eventosMockDinamicos.push(nuevoEvento);
-      console.log('✅ Evento mock creado:', nuevoEvento.titulo);
+      guardarEventosEnStorage(eventosMockDinamicos); // 💾 Guardar en localStorage
+      console.log('✅ Evento mock creado y guardado:', nuevoEvento.titulo);
       return nuevoEvento;
     }
 
@@ -278,6 +308,8 @@ export const eventosService = {
           ...evento,
           updated_at: new Date().toISOString()
         };
+        guardarEventosEnStorage(eventosMockDinamicos); // 💾 Guardar en localStorage
+        console.log('✅ Evento mock actualizado y guardado:', eventosMockDinamicos[index].titulo);
         return eventosMockDinamicos[index];
       }
       return null;
@@ -344,12 +376,108 @@ export const eventosService = {
 // SERVICIOS DE REGISTRO DE EVENTOS
 // =============================================
 
+// Datos mock para registros de eventos
+let registrosMockDinamicos: any[] = [
+  {
+    id: '1',
+    visitante_id: 'mock-v1',
+    evento_id: '1',
+    fecha_registro: new Date().toISOString(),
+    codigo_confirmacion: 'CCB-001-234',
+    estado: 'confirmado',
+    created_at: new Date().toISOString(),
+    visitante: {
+      nombre: 'María',
+      apellido: 'González',
+      email: 'maria@example.com',
+      telefono: '809-555-0123'
+    }
+  },
+  {
+    id: '2',
+    visitante_id: 'mock-v2',
+    evento_id: '1',
+    fecha_registro: new Date(Date.now() - 86400000).toISOString(),
+    codigo_confirmacion: 'CCB-001-567',
+    estado: 'checkin',
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+    visitante: {
+      nombre: 'Carlos',
+      apellido: 'Rodríguez',
+      email: 'carlos@example.com',
+      telefono: '809-555-0456'
+    }
+  },
+  {
+    id: '3',
+    visitante_id: 'mock-v3',
+    evento_id: '2',
+    fecha_registro: new Date(Date.now() - 172800000).toISOString(),
+    codigo_confirmacion: 'CCB-002-789',
+    estado: 'pendiente',
+    created_at: new Date(Date.now() - 172800000).toISOString(),
+    visitante: {
+      nombre: 'Ana',
+      apellido: 'Martínez',
+      email: 'ana@example.com',
+      telefono: '809-555-0789'
+    }
+  }
+];
+
+// Función para cargar registros desde localStorage
+const cargarRegistrosDelStorage = (): any[] => {
+  try {
+    const registrosGuardados = localStorage.getItem('ccb_registros_mock');
+    if (registrosGuardados) {
+      const registrosParsed = JSON.parse(registrosGuardados);
+      console.log('📋 Registros cargados desde localStorage:', registrosParsed.length);
+      return registrosParsed;
+    }
+  } catch (error) {
+    console.error('❌ Error cargando registros del storage:', error);
+  }
+  console.log('🔄 Usando registros mock por defecto');
+  return [...registrosMockDinamicos];
+};
+
+// Función para guardar registros en localStorage
+const guardarRegistrosEnStorage = (registros: any[]) => {
+  try {
+    localStorage.setItem('ccb_registros_mock', JSON.stringify(registros));
+    console.log('💾 Registros guardados en localStorage:', registros.length);
+  } catch (error) {
+    console.error('❌ Error guardando registros en storage:', error);
+  }
+};
+
+// Inicializar registros desde localStorage
+registrosMockDinamicos = cargarRegistrosDelStorage();
+
 export const registroEventosService = {
   async registrarVisitanteEnEvento(
     visitanteId: string, 
     eventoId: string, 
     codigoConfirmacion: string
   ): Promise<RegistroEvento | null> {
+    // Si Supabase no está configurado, simular registro en mock
+    if (!isSupabaseConfigured()) {
+      console.log('🧪 Simulando registro de visitante en evento (mock)');
+      const nuevoRegistro: RegistroEvento = {
+        id: `mock-${Date.now()}`,
+        visitante_id: visitanteId,
+        evento_id: eventoId,
+        fecha_registro: new Date().toISOString(),
+        codigo_confirmacion: codigoConfirmacion,
+        estado: 'confirmado' as const,
+        created_at: new Date().toISOString()
+      };
+      registrosMockDinamicos.push(nuevoRegistro);
+      guardarRegistrosEnStorage(registrosMockDinamicos);
+      console.log('✅ Registro mock creado:', codigoConfirmacion);
+      return nuevoRegistro;
+    }
+
     const { data, error } = await supabase
       .from('registro_eventos')
       .insert([{
@@ -371,6 +499,24 @@ export const registroEventosService = {
   },
 
   async confirmarCheckin(codigo: string): Promise<boolean> {
+    // Si Supabase no está configurado, simular check-in en mock
+    if (!isSupabaseConfigured()) {
+      console.log('🧪 Simulando check-in en datos mock');
+      const index = registrosMockDinamicos.findIndex(r => r.codigo_confirmacion === codigo);
+      if (index !== -1) {
+        registrosMockDinamicos[index] = {
+          ...registrosMockDinamicos[index],
+          estado: 'checkin',
+          updated_at: new Date().toISOString()
+        };
+        guardarRegistrosEnStorage(registrosMockDinamicos);
+        console.log('✅ Check-in mock confirmado:', codigo);
+        return true;
+      }
+      console.log('❌ Código no encontrado:', codigo);
+      return false;
+    }
+
     const { error } = await supabase
       .from('registro_eventos')
       .update({ 
@@ -388,6 +534,12 @@ export const registroEventosService = {
   },
 
   async obtenerRegistrosPorEvento(eventoId: string): Promise<RegistroEvento[]> {
+    // Si Supabase no está configurado, usar datos mock
+    if (!isSupabaseConfigured()) {
+      console.log('🧪 Obteniendo registros mock para evento:', eventoId);
+      return registrosMockDinamicos.filter(r => r.evento_id === eventoId);
+    }
+
     const { data, error } = await supabase
       .from('registro_eventos')
       .select(`
@@ -407,6 +559,148 @@ export const registroEventosService = {
     }
     
     return data || [];
+  },
+
+  async obtenerTodosLosRegistros(): Promise<any[]> {
+    // Si Supabase no está configurado, usar datos mock
+    if (!isSupabaseConfigured()) {
+      console.log('🧪 Obteniendo todos los registros mock');
+      return registrosMockDinamicos;
+    }
+
+    const { data, error } = await supabase
+      .from('registro_eventos')
+      .select(`
+        *,
+        visitantes (
+          nombre,
+          apellido,
+          email,
+          telefono
+        ),
+        eventos (
+          titulo,
+          fecha,
+          hora,
+          ubicacion
+        )
+      `)
+      .order('fecha_registro', { ascending: false });
+    
+    if (error) {
+      console.error('Error obteniendo todos los registros:', error);
+      return registrosMockDinamicos;
+    }
+    
+    return data || [];
+  },
+
+  async obtenerEstadisticasRegistros() {
+    if (!isSupabaseConfigured()) {
+      // Simular estadísticas con datos mock
+      const registros = registrosMockDinamicos;
+      const total = registros.length;
+      const confirmados = registros.filter(r => r.estado === 'confirmado').length;
+      const checkins = registros.filter(r => r.estado === 'checkin').length;
+      const pendientes = registros.filter(r => r.estado === 'pendiente').length;
+      
+      // Simular registros de hoy (últimas 24 horas)
+      const ahora = new Date();
+      const hace24h = new Date(ahora.getTime() - 24 * 60 * 60 * 1000);
+      const hoy = registros.filter(r => new Date(r.fecha_registro) > hace24h).length;
+      
+      // Calcular tasa de asistencia
+      const totalConfirmados = confirmados + checkins;
+      const tasaAsistencia = totalConfirmados > 0 ? Math.round((checkins / totalConfirmados) * 100) : 0;
+      
+      console.log('📊 Estadísticas calculadas (mock):', {
+        total, confirmados, checkins, pendientes, hoy, tasaAsistencia
+      });
+      
+      return {
+        total,
+        confirmados,
+        checkins,
+        pendientes,
+        hoy,
+        tasaAsistencia
+      };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('registro_eventos')
+        .select('estado, fecha_registro');
+
+      if (error) throw error;
+
+      const total = data.length;
+      const confirmados = data.filter(r => r.estado === 'confirmado').length;
+      const checkins = data.filter(r => r.estado === 'checkin').length;
+      const pendientes = data.filter(r => r.estado === 'pendiente').length;
+      
+      // Registros de hoy
+      const hoy = new Date().toISOString().split('T')[0];
+      const registrosHoy = data.filter(r => r.fecha_registro.startsWith(hoy)).length;
+      
+      // Tasa de asistencia
+      const totalConfirmados = confirmados + checkins;
+      const tasaAsistencia = totalConfirmados > 0 ? Math.round((checkins / totalConfirmados) * 100) : 0;
+
+      return {
+        total,
+        confirmados,
+        checkins,
+        pendientes,
+        hoy: registrosHoy,
+        tasaAsistencia
+      };
+    } catch (error) {
+      console.error('❌ Error obteniendo estadísticas:', error);
+      return {
+        total: 0,
+        confirmados: 0,
+        checkins: 0,
+        pendientes: 0,
+        hoy: 0,
+        tasaAsistencia: 0
+      };
+    }
+  },
+
+  async buscarRegistroPorCodigo(codigo: string) {
+    // Si Supabase no está configurado, usar datos mock
+    if (!isSupabaseConfigured()) {
+      console.log('🧪 Buscando registro mock por código:', codigo);
+      return registrosMockDinamicos.find(r => r.codigo_confirmacion === codigo) || null;
+    }
+
+    const { data, error } = await supabase
+      .from('registro_eventos')
+      .select(`
+        *,
+        visitantes (
+          nombre,
+          apellido,
+          email,
+          telefono
+        ),
+        eventos (
+          titulo,
+          fecha,
+          hora,
+          ubicacion
+        )
+      `)
+      .eq('codigo_confirmacion', codigo)
+      .single();
+    
+    if (error) {
+      console.error('Error buscando registro por código:', error);
+      return null;
+    }
+    
+    return data;
   }
 };
 

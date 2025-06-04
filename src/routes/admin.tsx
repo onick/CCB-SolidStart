@@ -2,6 +2,28 @@ import { Component, createEffect, createSignal, onMount, Show } from 'solid-js';
 import { eventosService, visitantesService } from '../lib/supabase/services';
 import '../styles/admin.css';
 
+// solid-icons for better performance and native Solid.js integration
+import {
+    FaRegularCalendar,
+    FaSolidArrowRightFromBracket,
+    FaSolidCalendarDay,
+    FaSolidChartBar,
+    FaSolidChartLine,
+    FaSolidCode,
+    FaSolidDollarSign,
+    FaSolidDownload,
+    FaSolidFire,
+    FaSolidGear,
+    FaSolidHouse,
+    FaSolidPlus,
+    FaSolidShare,
+    FaSolidStar,
+    FaSolidTags,
+    FaSolidTicket,
+    FaSolidUserCheck,
+    FaSolidUsers
+} from 'solid-icons/fa';
+
 // Función para verificar si Supabase está configurado
 const isSupabaseConfigured = () => {
   const url = import.meta.env.VITE_SUPABASE_URL;
@@ -280,35 +302,35 @@ const Admin: Component = () => {
             <div class="nav-section">
               <div class="nav-section-title">Principal</div>
               <div class="nav-item active">
-                <i class="fas fa-home"></i>
+                <FaSolidHouse size={18} color="#F39D1E" />
                 <span>Dashboard</span>
               </div>
               <div class="nav-item">
-                <i class="fas fa-chart-bar"></i>
+                <FaSolidChartBar size={18} color="white" />
                 <span>Reportes</span>
               </div>
               <div class="nav-item">
-                <i class="fas fa-cog"></i>
+                <FaSolidGear size={18} color="white" />
                 <span>Configuración</span>
               </div>
             </div>
             
             <div class="nav-section">
               <div class="nav-section-title">Gestionar</div>
-              <div class="nav-item" onclick="window.location.href='/eventos'" style="cursor: pointer;">
-                <i class="fas fa-calendar-alt"></i>
+              <div class="nav-item" onclick={() => window.location.href='/eventos'} style="cursor: pointer;">
+                <FaRegularCalendar size={18} color="white" />
                 <span>Eventos</span>
               </div>
               <div class="nav-item">
-                <i class="fas fa-users"></i>
+                <FaSolidUsers size={18} color="white" />
                 <span>Visitantes</span>
               </div>
-              <div class="nav-item">
-                <i class="fas fa-ticket-alt"></i>
+              <div class="nav-item" onclick={() => window.location.href='/registros'} style="cursor: pointer;">
+                <FaSolidTicket size={18} color="white" />
                 <span>Registros</span>
               </div>
               <div class="nav-item">
-                <i class="fas fa-tags"></i>
+                <FaSolidTags size={18} color="white" />
                 <span>Promociones</span>
               </div>
             </div>
@@ -316,11 +338,11 @@ const Admin: Component = () => {
             <div class="nav-section">
               <div class="nav-section-title">Herramientas</div>
               <div class="nav-item">
-                <i class="fas fa-code"></i>
+                <FaSolidCode size={18} color="white" />
                 <span>Integraciones</span>
               </div>
               <div class="nav-item">
-                <i class="fas fa-download"></i>
+                <FaSolidDownload size={18} color="white" />
                 <span>Exportar</span>
               </div>
             </div>
@@ -339,15 +361,15 @@ const Admin: Component = () => {
             </div>
             <div class="header-right">
               <button class="btn-header btn-secondary">
-                <i class="fas fa-share-alt"></i>
+                <FaSolidShare size={16} color="white" />
                 Compartir
               </button>
               <button class="btn-header btn-primary">
-                <i class="fas fa-plus"></i>
+                <FaSolidPlus size={16} color="white" />
                 Nuevo Evento
               </button>
               <button class="btn-header btn-logout" onclick={handleLogout}>
-                <i class="fas fa-sign-out-alt"></i>
+                <FaSolidArrowRightFromBracket size={16} color="white" />
                 Cerrar Sesión
               </button>
             </div>
@@ -375,7 +397,7 @@ const Admin: Component = () => {
               <div class="stat-card">
                 <div class="stat-header">
                   <div class="stat-icon blue">
-                    <i class="fas fa-calendar-alt"></i>
+                    <FaRegularCalendar size={20} color="white" />
                   </div>
                 </div>
                 <div class="stat-number">
@@ -393,7 +415,7 @@ const Admin: Component = () => {
                     <div class="stat-title">Visitantes</div>
                   </div>
                   <div class="stat-icon purple">
-                    <i class="fas fa-users"></i>
+                    <FaSolidUsers size={20} color="white" />
                   </div>
                 </div>
                 <div class="stat-number">
@@ -411,7 +433,7 @@ const Admin: Component = () => {
                     <div class="stat-title">Check-ins</div>
                   </div>
                   <div class="stat-icon teal">
-                    <i class="fas fa-user-check"></i>
+                    <FaSolidUserCheck size={20} color="white" />
                   </div>
                 </div>
                 <div class="stat-number">
@@ -429,7 +451,7 @@ const Admin: Component = () => {
                     <div class="stat-title">Ingresos</div>
                   </div>
                   <div class="stat-icon orange">
-                    <i class="fas fa-dollar-sign"></i>
+                    <FaSolidDollarSign size={20} color="white" />
                   </div>
                 </div>
                 <div class="stat-number">
@@ -447,7 +469,7 @@ const Admin: Component = () => {
                     <div class="stat-title">Ocupación</div>
                   </div>
                   <div class="stat-icon green">
-                    <i class="fas fa-chart-line"></i>
+                    <FaSolidChartLine size={20} color="white" />
                   </div>
                 </div>
                 <div class="stat-number">
@@ -465,7 +487,7 @@ const Admin: Component = () => {
                     <div class="stat-title">Eventos Populares</div>
                   </div>
                   <div class="stat-icon red">
-                    <i class="fas fa-fire"></i>
+                    <FaSolidFire size={20} color="white" />
                   </div>
                 </div>
                 <div class="stat-number">
@@ -504,7 +526,7 @@ const Admin: Component = () => {
                 <div class="activity-list">
                   <div class="activity-item">
                     <div class="activity-avatar">
-                      <i class="fas fa-user-check"></i>
+                      <FaSolidUserCheck size={16} color="#4a90e2" />
                     </div>
                     <div class="activity-content">
                       <div class="activity-text"><strong>María González</strong> se registró para "Concierto de Jazz"</div>
@@ -514,7 +536,7 @@ const Admin: Component = () => {
                   
                   <div class="activity-item">
                     <div class="activity-avatar">
-                      <i class="fas fa-calendar"></i>
+                      <FaSolidCalendarDay size={16} color="#4a90e2" />
                     </div>
                     <div class="activity-content">
                       <div class="activity-text"><strong>Evento creado:</strong> "Exposición de Arte Contemporáneo"</div>
@@ -524,7 +546,7 @@ const Admin: Component = () => {
                   
                   <div class="activity-item">
                     <div class="activity-avatar">
-                      <i class="fas fa-users"></i>
+                      <FaSolidUsers size={16} color="#4a90e2" />
                     </div>
                     <div class="activity-content">
                       <div class="activity-text"><strong>15 personas</strong> se registraron para "Taller de Fotografía"</div>
@@ -534,7 +556,7 @@ const Admin: Component = () => {
                   
                   <div class="activity-item">
                     <div class="activity-avatar">
-                      <i class="fas fa-star"></i>
+                      <FaSolidStar size={16} color="#4a90e2" />
                     </div>
                     <div class="activity-content">
                       <div class="activity-text"><strong>Evento destacado:</strong> "Noche de Poesía" alcanzó 100 registros</div>

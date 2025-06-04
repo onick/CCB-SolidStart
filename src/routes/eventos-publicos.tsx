@@ -5,21 +5,22 @@ import '../styles/global.css';
 const EventosPublicos: Component = () => {
   const [eventos, setEventos] = createSignal([]);
   const [isLoading, setIsLoading] = createSignal(true);
-  const [searchTerm, setSearchTerm] = createSignal('');
-  const [filterCategory, setFilterCategory] = createSignal('todas');
-  const [currentSlide, setCurrentSlide] = createSignal(0);
-  const [isAutoPlaying, setIsAutoPlaying] = createSignal(true);
+  const [activeFilter, setActiveFilter] = createSignal('todos');
+  const [showRegistroModal, setShowRegistroModal] = createSignal(false);
+  const [selectedEvento, setSelectedEvento] = createSignal(null);
+  const [showSyncInfo, setShowSyncInfo] = createSignal(true);
 
   onMount(async () => {
     console.log('📅 Cargando eventos públicos...');
     try {
       const eventosData = await eventosService.obtenerTodos();
+      console.log('📊 Eventos obtenidos:', eventosData);
+      
       // Solo mostrar eventos activos al público
       const eventosActivos = eventosData.filter(evento => evento.estado === 'activo');
-      setEventos(eventosActivos);
+      console.log('🎯 Eventos activos filtrados:', eventosActivos);
       
-      // Auto-play del carrusel
-      startAutoPlay();
+      setEventos(eventosActivos);
     } catch (error) {
       console.error('❌ Error cargando eventos:', error);
     } finally {
@@ -27,60 +28,99 @@ const EventosPublicos: Component = () => {
     }
   });
 
-  const startAutoPlay = () => {
-    setInterval(() => {
-      if (isAutoPlaying() && filteredEventos().length > 0) {
-        setCurrentSlide((prev) => (prev + 1) % Math.ceil(filteredEventos().length / getEventsPerSlide()));
-      }
-    }, 5000); // Cambiar cada 5 segundos
+  // Función para recargar eventos (útil para sincronización)
+  const recargarEventos = async () => {
+    console.log('🔄 Recargando eventos públicos...');
+    setIsLoading(true);
+    try {
+      const eventosData = await eventosService.obtenerTodos();
+      console.log('📊 Eventos recargados:', eventosData);
+      
+      // Solo mostrar eventos activos al público
+      const eventosActivos = eventosData.filter(evento => evento.estado === 'activo');
+      console.log('🎯 Eventos activos después de recarga:', eventosActivos);
+      
+      setEventos(eventosActivos);
+    } catch (error) {
+      console.error('❌ Error recargando eventos:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const getEventsPerSlide = () => {
-    // Responsive: mostrar diferentes cantidades según el tamaño de pantalla
-    if (window.innerWidth >= 1200) return 3;
-    if (window.innerWidth >= 768) return 2;
-    return 1;
-  };
+  // Auto-recarga cada 30 segundos para mantener sincronización
+  setInterval(() => {
+    console.log('⏰ Auto-recarga de eventos (cada 30s)');
+    recargarEventos();
+  }, 30000);
+
+  // Ocultar información de sincronización después de 10 segundos
+  setTimeout(() => {
+    setShowSyncInfo(false);
+  }, 10000);
 
   const filteredEventos = () => {
-    return eventos().filter(evento => {
-      const matchesSearch = evento.titulo.toLowerCase().includes(searchTerm().toLowerCase()) ||
-                           evento.descripcion.toLowerCase().includes(searchTerm().toLowerCase());
-      const matchesCategory = filterCategory() === 'todas' || evento.categoria === filterCategory();
-      
-      return matchesSearch && matchesCategory;
-    });
+    let eventosBase = eventos();
+
+    // Aplicar filtro principal (TODOS, PRÓXIMOS, EN CURSO)
+    if (activeFilter() === 'proximos') {
+      eventosBase = eventosBase.filter(evento => {
+        const now = new Date();
+        const eventDateTime = new Date(`${evento.fecha}T${evento.hora}`);
+        const thirtyMinBefore = new Date(eventDateTime.getTime() - (30 * 60 * 1000));
+        return now < thirtyMinBefore;
+      });
+    } else if (activeFilter() === 'en-curso') {
+      eventosBase = eventosBase.filter(evento => isEventoActivo(evento));
+    }
+
+    return eventosBase;
   };
 
-  const getTotalSlides = () => {
-    return Math.ceil(filteredEventos().length / getEventsPerSlide());
+  // Función para determinar si un evento está activo para check-in
+  const isEventoActivo = (evento: any) => {
+    const now = new Date();
+    const eventDateTime = new Date(`${evento.fecha}T${evento.hora}`);
+    const eventEndTime = new Date(eventDateTime.getTime() + (evento.duracion * 60 * 60 * 1000));
+    const thirtyMinBefore = new Date(eventDateTime.getTime() - (30 * 60 * 1000));
+    
+    return now >= thirtyMinBefore && now <= eventEndTime;
   };
 
-  const getCurrentSlideEvents = () => {
-    const eventsPerSlide = getEventsPerSlide();
-    const startIndex = currentSlide() * eventsPerSlide;
-    return filteredEventos().slice(startIndex, startIndex + eventsPerSlide);
+  // Función para determinar el estado del evento
+  const getEventStatus = (evento: any) => {
+    const now = new Date();
+    const eventDateTime = new Date(`${evento.fecha}T${evento.hora}`);
+    const eventEndTime = new Date(eventDateTime.getTime() + (evento.duracion * 60 * 60 * 1000));
+    const thirtyMinBefore = new Date(eventDateTime.getTime() - (30 * 60 * 1000));
+    
+    if (now > eventEndTime) {
+      return { status: 'Finalizado', color: '#6B7280', bgColor: '#F3F4F6' };
+    } else if (now >= thirtyMinBefore && now <= eventEndTime) {
+      return { status: 'En curso', color: '#059669', bgColor: '#D1FAE5' };
+    } else {
+      return { status: 'Próximamente', color: '#EA580C', bgColor: '#FED7AA' };
+    }
   };
 
-  const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % getTotalSlides());
+  // Función para generar código único
+  const generateEventCode = (eventId: string, userEmail: string) => {
+    const timestamp = Date.now();
+    const hash = btoa(`${eventId}-${userEmail}-${timestamp}`).slice(0, 8);
+    return `CCB-${hash.toUpperCase()}`;
   };
 
-  const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + getTotalSlides()) % getTotalSlides());
-  };
-
-  const goToSlide = (index: number) => {
-    setCurrentSlide(index);
+  // Función para abrir modal de registro
+  const openRegistroModal = (evento: any) => {
+    setSelectedEvento(evento);
+    setShowRegistroModal(true);
   };
 
   const formatDate = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-ES', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    const date = new Date(fecha);
+    const day = date.getDate();
+    const month = date.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase();
+    return { day, month };
   };
 
   const formatTime = (hora: string) => {
@@ -90,323 +130,441 @@ const EventosPublicos: Component = () => {
     });
   };
 
-  const getAvailableSpots = (evento: any) => {
-    return evento.capacidad - evento.registrados;
-  };
-
-  const getCategoryIcon = (categoria: string) => {
-    switch (categoria) {
-      case 'concierto': return '🎵';
-      case 'teatro': return '🎭';
-      case 'exposicion': return '🖼️';
-      case 'taller': return '🛠️';
-      case 'conferencia': return '🎤';
-      case 'danza': return '💃';
-      default: return '🎪';
-    }
+  const getCurrentTime = () => {
+    return new Date().toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
-    <div style="min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #f6ad55 50%, #f093fb 100%); overflow-x: hidden;">
-      {/* Header */}
-      <header style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 1rem 0; box-shadow: 0 2px 20px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 100;">
-        <div style="max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between;">
-          <div style="display: flex; align-items: center; gap: 1rem;">
-            <img src="/images/logo.png" alt="CCB" style="height: 50px;" />
-            <div>
-              <h1 style="margin: 0; color: #1a202c; font-size: 1.5rem;">Centro Cultural Banreservas</h1>
-              <p style="margin: 0; color: #4a5568; font-size: 0.9rem;">Eventos y Actividades Culturales</p>
-            </div>
+    <div style="min-height: 100vh; background: #F8FAFC; margin: 0; padding: 0;">
+      {/* Header Azul pegado al borde superior */}
+      <header style="background: #0EA5E9; padding: 1rem; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.1); width: 100vw; margin: 0; position: relative; left: 50%; right: 50%; margin-left: -50vw; margin-right: -50vw;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.95); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+            <img 
+              src="/images/logo.png" 
+              alt="Centro Cultural Banreservas" 
+              style="width: 44px; height: 44px; object-fit: contain; border-radius: 50%;"
+            />
           </div>
-          <div style="display: flex; gap: 1rem; align-items: center;">
-            <button 
-              onclick={() => setIsAutoPlaying(!isAutoPlaying())}
-              style={`background: ${isAutoPlaying() ? '#e67e22' : '#6b7280'}; color: white; padding: 0.5rem 1rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s;`}
-            >
-              <i class={`fas ${isAutoPlaying() ? 'fa-pause' : 'fa-play'}`}></i>
-              {isAutoPlaying() ? ' Pausar' : ' Reproducir'}
-            </button>
-            <a href="/" style="background: #667eea; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 500;">
-              <i class="fas fa-home"></i> Inicio
-            </a>
-          </div>
+          <span style="color: white; font-size: 1.1rem; font-weight: 600;">Centro Cultural Banreservas</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 2rem;">
+          <span style="color: white; font-size: 1.1rem; font-weight: 600;">Eventos</span>
+          <button 
+            onclick={recargarEventos}
+            style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;"
+            onMouseEnter={(e) => {
+              (e.target as HTMLButtonElement).style.background = 'rgba(255,255,255,0.3)';
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLButtonElement).style.background = 'rgba(255,255,255,0.2)';
+            }}
+          >
+            🔄 Actualizar
+          </button>
+          <span style="color: white; font-size: 1.1rem; font-weight: 500;">{getCurrentTime()}</span>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main style="max-width: 1400px; margin: 0 auto; padding: 2rem;">
-        <div style="text-align: center; margin-bottom: 3rem;">
-          <h2 style="color: white; font-size: 3rem; margin-bottom: 0.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.3); font-weight: 800;">
-            🎭 Nuestros Eventos
-          </h2>
-          <p style="color: rgba(255,255,255,0.9); font-size: 1.2rem; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">
-            Descubre las actividades culturales que tenemos para ti
-          </p>
+      {/* Navegación por Pestañas */}
+      <div class="nav-buttons-container" style="background: white; padding: 1.5rem 1rem; border-bottom: 1px solid #E5E7EB; display: flex; justify-content: center; width: 100vw; margin: 0; position: relative; left: 50%; right: 50%; margin-left: -50vw; margin-right: -50vw;">
+        <div class="nav-buttons-group" style="display: flex; gap: 1rem; background: #F3F4F6; padding: 0.5rem; border-radius: 12px;">
+          <button 
+            class="nav-button"
+            onclick={() => setActiveFilter('todos')}
+            style={`padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s; min-width: 120px; ${
+              activeFilter() === 'todos' 
+                ? 'background: #0EA5E9; color: white; box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);' 
+                : 'background: transparent; color: #6B7280; hover:background: white; hover:color: #374151;'
+            }`}
+            onMouseEnter={(e) => {
+              if (activeFilter() !== 'todos') {
+                (e.target as HTMLButtonElement).style.background = 'white';
+                (e.target as HTMLButtonElement).style.color = '#374151';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeFilter() !== 'todos') {
+                (e.target as HTMLButtonElement).style.background = 'transparent';
+                (e.target as HTMLButtonElement).style.color = '#6B7280';
+              }
+            }}
+          >
+            Todos
+          </button>
+          <button 
+            class="nav-button"
+            onclick={() => setActiveFilter('en-curso')}
+            style={`padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s; min-width: 120px; ${
+              activeFilter() === 'en-curso' 
+                ? 'background: #0EA5E9; color: white; box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);' 
+                : 'background: transparent; color: #6B7280; hover:background: white; hover:color: #374151;'
+            }`}
+            onMouseEnter={(e) => {
+              if (activeFilter() !== 'en-curso') {
+                (e.target as HTMLButtonElement).style.background = 'white';
+                (e.target as HTMLButtonElement).style.color = '#374151';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeFilter() !== 'en-curso') {
+                (e.target as HTMLButtonElement).style.background = 'transparent';
+                (e.target as HTMLButtonElement).style.color = '#6B7280';
+              }
+            }}
+          >
+            En curso
+          </button>
+          <button 
+            class="nav-button"
+            onclick={() => setActiveFilter('proximos')}
+            style={`padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s; min-width: 120px; ${
+              activeFilter() === 'proximos' 
+                ? 'background: #0EA5E9; color: white; box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);' 
+                : 'background: transparent; color: #6B7280; hover:background: white; hover:color: #374151;'
+            }`}
+            onMouseEnter={(e) => {
+              if (activeFilter() !== 'proximos') {
+                (e.target as HTMLButtonElement).style.background = 'white';
+                (e.target as HTMLButtonElement).style.color = '#374151';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeFilter() !== 'proximos') {
+                (e.target as HTMLButtonElement).style.background = 'transparent';
+                (e.target as HTMLButtonElement).style.color = '#6B7280';
+              }
+            }}
+          >
+            Próximos
+          </button>
         </div>
+      </div>
 
-        {/* Filtros */}
-        <div style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 16px; padding: 2rem; margin-bottom: 3rem; box-shadow: 0 8px 32px rgba(0,0,0,0.1);">
-          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; align-items: end;">
-            <div>
-              <label style="display: block; margin-bottom: 0.5rem; font-weight: 700; color: #2d3748; font-size: 1.1rem;">🔍 Buscar eventos:</label>
-              <input
-                type="text"
-                placeholder="¿Qué evento te interesa?"
-                value={searchTerm()}
-                onInput={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentSlide(0); // Resetear al primer slide cuando se filtra
-                }}
-                style="width: 100%; padding: 1rem; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; transition: all 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-              />
+      {/* Información de Sincronización */}
+      <Show when={showSyncInfo()}>
+        <div style="background: #EFF6FF; border-left: 4px solid #0EA5E9; padding: 1rem; margin: 0; border-bottom: 1px solid #E5E7EB;">
+          <div style="max-width: 1200px; margin: 0 auto; display: flex; align-items: center; gap: 1rem;">
+            <div style="color: #0EA5E9; font-size: 1.2rem;">ℹ️</div>
+            <div style="flex: 1;">
+              <p style="margin: 0; color: #1E40AF; font-size: 0.9rem; font-weight: 500;">
+                <strong>Sincronización Automática:</strong> Los eventos creados en el sistema administrativo aparecen aquí automáticamente. 
+                La página se actualiza cada 30 segundos o puedes usar el botón "🔄 Actualizar" en el header.
+              </p>
             </div>
-            <div>
-              <label style="display: block; margin-bottom: 0.5rem; font-weight: 700; color: #2d3748; font-size: 1.1rem;">🎪 Categoría:</label>
-              <select
-                value={filterCategory()}
-                onChange={(e) => {
-                  setFilterCategory(e.target.value);
-                  setCurrentSlide(0); // Resetear al primer slide cuando se filtra
-                }}
-                style="width: 100%; padding: 1rem; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"
-              >
-                <option value="todas">🎪 Todas</option>
-                <option value="concierto">🎵 Conciertos</option>
-                <option value="teatro">🎭 Teatro</option>
-                <option value="exposicion">🖼️ Exposiciones</option>
-                <option value="taller">🛠️ Talleres</option>
-                <option value="conferencia">🎤 Conferencias</option>
-                <option value="danza">💃 Danza</option>
-              </select>
-            </div>
+            <button 
+              onclick={() => setShowSyncInfo(false)}
+              style="background: transparent; border: none; color: #0EA5E9; cursor: pointer; font-size: 1.1rem; padding: 0.25rem;"
+              title="Ocultar información"
+            >
+              ✕
+            </button>
           </div>
         </div>
+      </Show>
 
+      {/* Contenido Principal */}
+      <main style="padding: 2rem;">
+        
         {/* Loading */}
         <Show when={isLoading()}>
-          <div style="text-align: center; padding: 4rem; color: white;">
-            <div style="display: inline-block; width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid white; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem;"></div>
-            <p style="font-size: 1.2rem; font-weight: 600;">Cargando eventos mágicos...</p>
+          <div style="text-align: center; padding: 4rem; color: #6B7280;">
+            <div style="display: inline-block; width: 40px; height: 40px; border: 3px solid #E5E7EB; border-top: 3px solid #0EA5E9; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem;"></div>
+            <p style="font-size: 1rem; font-weight: 500;">Cargando eventos...</p>
           </div>
         </Show>
 
         {/* No events */}
         <Show when={!isLoading() && filteredEventos().length === 0}>
-          <div style="text-align: center; padding: 4rem; color: white;">
-            <div style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.7;">🎭</div>
-            <h3 style="margin-bottom: 0.5rem; font-size: 1.5rem;">No hay eventos disponibles</h3>
-            <p style="opacity: 0.8; font-size: 1.1rem;">No se encontraron eventos que coincidan con tu búsqueda.</p>
+          <div style="text-align: center; padding: 4rem; color: #6B7280;">
+            <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">📅</div>
+            <h3 style="margin-bottom: 0.5rem; font-size: 1.2rem; color: #374151;">No hay eventos disponibles</h3>
+            <p style="opacity: 0.8; font-size: 1rem; margin-bottom: 1rem;">No se encontraron eventos activos en esta categoría.</p>
+            <div style="background: #F3F4F6; padding: 1rem; border-radius: 8px; margin: 1rem auto; max-width: 500px;">
+              <p style="font-size: 0.9rem; color: #6B7280; margin: 0;">
+                💡 <strong>¿Esperando eventos nuevos?</strong><br/>
+                Los eventos creados en el panel de administración aparecerán aquí automáticamente.<br/>
+                Haz clic en "🔄 Actualizar" en el header para sincronizar manualmente.
+              </p>
+            </div>
           </div>
         </Show>
 
-        {/* Carrusel de Eventos */}
+        {/* Lista de Eventos */}
         <Show when={!isLoading() && filteredEventos().length > 0}>
-          <div style="position: relative;">
-            {/* Contador de eventos */}
-            <div style="text-align: center; margin-bottom: 2rem;">
-              <div style="background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); display: inline-block; padding: 0.75rem 1.5rem; border-radius: 25px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-                <span style="color: #2d3748; font-weight: 700; font-size: 1.1rem;">
-                  📊 {filteredEventos().length} eventos disponibles
-                </span>
-              </div>
-            </div>
+          <div class="eventos-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; max-width: none; padding: 0 1rem;">
+            <For each={filteredEventos()}>
+              {(evento) => {
+                const dateInfo = formatDate(evento.fecha);
+                const statusInfo = getEventStatus(evento);
+                
+                return (
+                  <div 
+                    style="background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #E5E7EB; cursor: pointer; transition: all 0.2s;"
+                    onclick={() => openRegistroModal(evento)}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                    }}
+                  >
+                    <div style="display: flex; gap: 1.5rem; align-items: center;">
+                      
+                      {/* Fecha */}
+                      <div style="background: #0EA5E9; color: white; padding: 1rem; border-radius: 8px; text-align: center; min-width: 80px;">
+                        <div style="font-size: 1.5rem; font-weight: bold; line-height: 1;">{dateInfo.day}</div>
+                        <div style="font-size: 0.9rem; font-weight: 500; opacity: 0.9;">{dateInfo.month}</div>
+                      </div>
 
-            {/* Controles del carrusel */}
-            <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-bottom: 2rem;">
-              <button 
-                onclick={prevSlide}
-                disabled={getTotalSlides() <= 1}
-                style={`background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #2d3748; box-shadow: 0 4px 16px rgba(0,0,0,0.1); transition: all 0.2s; ${getTotalSlides() <= 1 ? 'opacity: 0.5; cursor: not-allowed;' : ''}`}
-                onMouseEnter={(e) => getTotalSlides() > 1 && (e.target.style.transform = 'scale(1.1)')}
-                onMouseLeave={(e) => getTotalSlides() > 1 && (e.target.style.transform = 'scale(1)')}
-              >
-                <i class="fas fa-chevron-left"></i>
-              </button>
-
-              {/* Indicadores de slides */}
-              <div style="display: flex; gap: 0.5rem;">
-                <For each={Array.from({ length: getTotalSlides() }, (_, i) => i)}>
-                  {(index) => (
-                    <button
-                      onclick={() => goToSlide(index)}
-                      style={`width: 12px; height: 12px; border-radius: 50%; border: none; cursor: pointer; transition: all 0.2s; ${currentSlide() === index ? 'background: white; transform: scale(1.2);' : 'background: rgba(255,255,255,0.5);'}`}
-                    />
-                  )}
-                </For>
-              </div>
-
-              <button 
-                onclick={nextSlide}
-                disabled={getTotalSlides() <= 1}
-                style={`background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #2d3748; box-shadow: 0 4px 16px rgba(0,0,0,0.1); transition: all 0.2s; ${getTotalSlides() <= 1 ? 'opacity: 0.5; cursor: not-allowed;' : ''}`}
-                onMouseEnter={(e) => getTotalSlides() > 1 && (e.target.style.transform = 'scale(1.1)')}
-                onMouseLeave={(e) => getTotalSlides() > 1 && (e.target.style.transform = 'scale(1)')}
-              >
-                <i class="fas fa-chevron-right"></i>
-              </button>
-            </div>
-
-            {/* Contenedor del carrusel */}
-            <div style="overflow: hidden; border-radius: 20px; position: relative;">
-              <div 
-                style={`display: flex; transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); transform: translateX(-${currentSlide() * 100}%);`}
-                onMouseEnter={() => setIsAutoPlaying(false)}
-                onMouseLeave={() => setIsAutoPlaying(true)}
-              >
-                <For each={Array.from({ length: getTotalSlides() }, (_, i) => i)}>
-                  {(slideIndex) => (
-                    <div style="min-width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 2rem; padding: 1rem;">
-                      <For each={filteredEventos().slice(slideIndex * getEventsPerSlide(), (slideIndex + 1) * getEventsPerSlide())}>
-                        {(evento) => (
-                          <div style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.15); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; position: relative;" 
-                               onMouseEnter={(e) => {
-                                 e.currentTarget.style.transform = 'translateY(-12px) scale(1.02)';
-                                 e.currentTarget.style.boxShadow = '0 20px 60px rgba(0,0,0,0.25)';
-                               }}
-                               onMouseLeave={(e) => {
-                                 e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                                 e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.15)';
-                               }}>
-                            
-                            {/* Event Image */}
-                            <div style="height: 220px; background: linear-gradient(135deg, #667eea, #f6ad55, #f093fb); position: relative; overflow: hidden;">
-                              <div style="position: absolute; top: 1rem; right: 1rem; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 0.5rem 1rem; border-radius: 25px; font-weight: 700; color: #2d3748; display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-                                <span style="font-size: 1.2rem;">{getCategoryIcon(evento.categoria)}</span>
-                                {evento.categoria}
-                              </div>
-                              <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 3rem 1.5rem 1.5rem; color: white;">
-                                <h3 style="margin: 0; font-size: 1.4rem; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">{evento.titulo}</h3>
-                              </div>
-                              
-                              {/* Efecto de brillo */}
-                              <div style="position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent); transform: rotate(45deg); transition: all 0.6s; opacity: 0;" 
-                                   class="shine-effect"></div>
-                            </div>
-
-                            {/* Event Content */}
-                            <div style="padding: 2rem;">
-                              <p style="color: #4a5568; margin-bottom: 1.5rem; line-height: 1.7; font-size: 1rem;">
-                                {evento.descripcion}
-                              </p>
-
-                              {/* Event Details */}
-                              <div style="margin-bottom: 2rem;">
-                                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(66, 153, 225, 0.1); border-radius: 12px;">
-                                  <i class="fas fa-calendar" style="color: #667eea; width: 20px; font-size: 1.1rem;"></i>
-                                  <span style="color: #2d3748; font-weight: 600; font-size: 1rem;">{formatDate(evento.fecha)}</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(246, 173, 85, 0.1); border-radius: 12px;">
-                                  <i class="fas fa-clock" style="color: #f6ad55; width: 20px; font-size: 1.1rem;"></i>
-                                  <span style="color: #2d3748; font-weight: 600; font-size: 1rem;">{formatTime(evento.hora)} ({evento.duracion}h)</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(240, 147, 251, 0.1); border-radius: 12px;">
-                                  <i class="fas fa-map-marker-alt" style="color: #f093fb; width: 20px; font-size: 1.1rem;"></i>
-                                  <span style="color: #2d3748; font-weight: 600; font-size: 1rem;">{evento.ubicacion}</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: rgba(72, 187, 120, 0.1); border-radius: 12px;">
-                                  <i class="fas fa-users" style="color: #48bb78; width: 20px; font-size: 1.1rem;"></i>
-                                  <span style="color: #2d3748; font-weight: 600; font-size: 1rem;">
-                                    {getAvailableSpots(evento)} cupos disponibles de {evento.capacidad}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Availability Bar */}
-                              <div style="margin-bottom: 2rem;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                                  <span style="font-size: 1rem; color: #4a5568; font-weight: 600;">Ocupación del evento</span>
-                                  <span style="font-size: 1.1rem; font-weight: 800; color: #2d3748;">
-                                    {Math.round((evento.registrados / evento.capacidad) * 100)}%
-                                  </span>
-                                </div>
-                                <div style="width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);">
-                                  <div 
-                                    style={`width: ${(evento.registrados / evento.capacidad) * 100}%; height: 100%; background: linear-gradient(90deg, ${(evento.registrados / evento.capacidad) > 0.8 ? '#f56565, #e53e3e' : (evento.registrados / evento.capacidad) > 0.6 ? '#ed8936, #dd6b20' : '#48bb78, #38a169'}); transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 4px;`}
-                                  ></div>
-                                </div>
-                              </div>
-
-                              {/* Register Button */}
-                              <button 
-                                style={`width: 100%; padding: 1rem; border: none; border-radius: 12px; font-weight: 700; font-size: 1.1rem; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden; ${getAvailableSpots(evento) > 0 ? 'background: linear-gradient(135deg, #667eea, #f6ad55); color: white; box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);' : 'background: #e2e8f0; color: #a0aec0; cursor: not-allowed;'}`}
-                                disabled={getAvailableSpots(evento) === 0}
-                                onMouseEnter={(e) => {
-                                  if (getAvailableSpots(evento) > 0) {
-                                    e.target.style.transform = 'translateY(-2px)';
-                                    e.target.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.4)';
-                                  }
-                                }}
-                                onMouseLeave={(e) => {
-                                  if (getAvailableSpots(evento) > 0) {
-                                    e.target.style.transform = 'translateY(0)';
-                                    e.target.style.boxShadow = '0 4px 16px rgba(102, 126, 234, 0.3)';
-                                  }
-                                }}
-                              >
-                                {getAvailableSpots(evento) > 0 ? (
-                                  <>
-                                    <i class="fas fa-ticket-alt" style="margin-right: 0.5rem;"></i> 
-                                    🎫 Registrarse al Evento
-                                  </>
-                                ) : (
-                                  <>
-                                    <i class="fas fa-times-circle" style="margin-right: 0.5rem;"></i> 
-                                    😔 Evento Lleno
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </For>
+                      {/* Información del Evento */}
+                      <div style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                          <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #111827;">{evento.titulo}</h3>
+                          <span 
+                            style={`padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 500; color: ${statusInfo.color}; background: ${statusInfo.bgColor};`}
+                          >
+                            {statusInfo.status}
+                          </span>
+                        </div>
+                        
+                        <div style="color: #6B7280; font-size: 0.9rem; margin-bottom: 0.25rem;">
+                          {evento.ubicacion}
+                        </div>
+                        
+                        <div style="color: #6B7280; font-size: 0.9rem;">
+                          {formatTime(evento.hora)} - {formatTime(`${parseInt(evento.hora.split(':')[0]) + evento.duracion}:${evento.hora.split(':')[1]}`)}
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </For>
-              </div>
-            </div>
+                  </div>
+                );
+              }}
+            </For>
           </div>
         </Show>
       </main>
 
-      {/* Footer */}
-      <footer style="background: rgba(0,0,0,0.3); backdrop-filter: blur(10px); margin-top: 4rem; padding: 3rem 0; text-align: center; color: rgba(255,255,255,0.9);">
-        <div style="max-width: 1200px; margin: 0 auto; padding: 0 2rem;">
-          <h3 style="margin-bottom: 1rem; font-size: 1.5rem;">Centro Cultural Banreservas</h3>
-          <p style="margin: 0; font-size: 1.1rem; opacity: 0.8;">© 2024 - Todos los derechos reservados | Cultura para todos</p>
+      {/* Modal de Registro */}
+      <Show when={showRegistroModal()}>
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 2rem;">
+          <div style="background: white; border-radius: 16px; padding: 2rem; max-width: 500px; width: 90%; box-shadow: 0 20px 25px rgba(0,0,0,0.15); position: relative; animation: modalSlideIn 0.3s ease-out;">
+            
+            {/* Cerrar Modal */}
+            <button 
+              onclick={() => setShowRegistroModal(false)}
+              style="position: absolute; top: 1rem; right: 1rem; background: #F3F4F6; color: #6B7280; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+              onMouseEnter={(e) => {
+                (e.target as HTMLButtonElement).style.background = '#E5E7EB';
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLButtonElement).style.background = '#F3F4F6';
+              }}
+            >
+              ×
+            </button>
+
+            {/* Header del Modal */}
+            <div style="text-align: center; margin-bottom: 2rem;">
+              <div style="font-size: 2rem; margin-bottom: 1rem;">🎫</div>
+              <h2 style="color: #111827; font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">
+                Registro al Evento
+              </h2>
+              <Show when={selectedEvento()}>
+                <h3 style="color: #0EA5E9; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
+                  {selectedEvento()?.titulo}
+                </h3>
+                <p style="color: #6B7280; font-size: 0.9rem;">
+                  {selectedEvento() && isEventoActivo(selectedEvento()) 
+                    ? '🔴 Este evento está activo - Tu código estará listo para check-in'
+                    : '📧 Recibirás tu código por email'
+                  }
+                </p>
+              </Show>
+            </div>
+
+            {/* Formulario */}
+            <form style="display: flex; flex-direction: column; gap: 1rem;">
+              
+              {/* Nombre Completo */}
+              <div>
+                <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                  Nombre Completo *
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="Ingresa tu nombre completo"
+                  required
+                  style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                  onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                  onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                  Correo Electrónico *
+                </label>
+                <input 
+                  type="email" 
+                  placeholder="tu@email.com"
+                  required
+                  style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                  onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                  onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                />
+              </div>
+
+              {/* Teléfono */}
+              <div>
+                <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                  Teléfono (Opcional)
+                </label>
+                <input 
+                  type="tel" 
+                  placeholder="809-555-0123"
+                  style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                  onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                  onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                />
+              </div>
+
+              {/* Botones de Acción */}
+              <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+                <button 
+                  type="button"
+                  onclick={() => setShowRegistroModal(false)}
+                  style="flex: 1; padding: 0.75rem; border: 1px solid #D1D5DB; background: white; color: #6B7280; border-radius: 8px; font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: all 0.2s;"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  onclick={(e) => {
+                    e.preventDefault();
+                    console.log('Procesando registro...', {
+                      evento: selectedEvento(),
+                      esActivo: selectedEvento() && isEventoActivo(selectedEvento())
+                    });
+                    alert('¡Registro procesado! (Demo)');
+                    setShowRegistroModal(false);
+                  }}
+                  style="flex: 2; padding: 0.75rem; border: none; background: #0EA5E9; color: white; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                  onMouseEnter={(e) => {
+                    (e.target as HTMLButtonElement).style.background = '#0284C7';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.target as HTMLButtonElement).style.background = '#0EA5E9';
+                  }}
+                >
+                  Registrarse
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </footer>
+      </Show>
 
       <style>
         {`
+          /* Reset de márgenes y padding globales para eliminar espacios blancos */
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow-x: hidden;
+            width: 100%;
+            height: 100%;
+          }
+          
+          #root, #app {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100%;
+          }
+
+          /* Asegurar que no hay espacios en la parte superior */
+          html {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          /* Eliminar cualquier espacio superior del contenedor principal */
+          .main-container {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+          }
+
           @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
           }
 
-          .shine-effect {
-            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-          }
-
-          .shine-effect:hover {
-            opacity: 1 !important;
-            animation: shine 0.6s ease-out;
-          }
-
-          @keyframes shine {
-            0% {
-              transform: translateX(-100%) translateY(-100%) rotate(45deg);
+          @keyframes modalSlideIn {
+            from {
+              opacity: 0;
+              transform: scale(0.95) translateY(-10px);
             }
-            100% {
-              transform: translateX(100%) translateY(100%) rotate(45deg);
+            to {
+              opacity: 1;
+              transform: scale(1) translateY(0);
             }
           }
 
-          /* Responsive adjustments */
+          /* Responsive Grid para Eventos */
           @media (max-width: 768px) {
-            .carousel-container {
-              padding: 0.5rem;
+            .eventos-grid {
+              grid-template-columns: 1fr !important;
+              padding: 0 0.5rem !important;
+            }
+          }
+
+          @media (min-width: 769px) and (max-width: 1024px) {
+            .eventos-grid {
+              grid-template-columns: repeat(2, 1fr) !important;
+            }
+          }
+
+          @media (min-width: 1025px) {
+            .eventos-grid {
+              grid-template-columns: repeat(3, 1fr) !important;
+            }
+          }
+
+          /* Responsive Botones de Navegación */
+          @media (max-width: 768px) {
+            .nav-buttons-container {
+              padding: 1rem !important;
+            }
+            .nav-buttons-group {
+              flex-direction: column !important;
+              gap: 0.5rem !important;
+              padding: 0.75rem !important;
+            }
+            .nav-button {
+              min-width: auto !important;
+              padding: 0.5rem 1rem !important;
+              font-size: 0.9rem !important;
+            }
+          }
+
+          @media (min-width: 769px) and (max-width: 1024px) {
+            .nav-buttons-group {
+              gap: 0.75rem !important;
+            }
+            .nav-button {
+              min-width: 100px !important;
+              padding: 0.6rem 1.25rem !important;
             }
           }
         `}

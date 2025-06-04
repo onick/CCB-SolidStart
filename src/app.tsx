@@ -1,9 +1,12 @@
 import { Route, Router, useLocation } from '@solidjs/router';
 import { Component, createSignal } from 'solid-js';
 import './App.css';
+// 🎨 Importando solid-icons para mejor rendimiento y integración nativa
+import { FaRegularCalendar, FaSolidGear, FaSolidRightToBracket, FaSolidUserPlus } from 'solid-icons/fa';
 import Admin from './routes/admin';
 import Eventos from './routes/eventos';
 import EventosPublicos from './routes/eventos-publicos';
+import Registros from './routes/registros';
 import SetupSupabase from './routes/setup-supabase';
 
 const App: Component = () => {
@@ -13,6 +16,7 @@ const App: Component = () => {
         <Route path="/" component={Home} />
         <Route path="/eventos" component={Eventos} />
         <Route path="/eventos-publicos" component={EventosPublicos} />
+        <Route path="/registros" component={Registros} />
         <Route path="/admin" component={Admin} />
         <Route path="/setup-supabase" component={SetupSupabase} />
         <Route path="/registro" component={Registro} />
@@ -28,14 +32,6 @@ const Layout: Component = (props: any) => {
   
   return (
     <div class="app">
-      {/* Botón de Administración Circular - Solo mostrar si NO estamos en /admin */}
-      {location.pathname !== '/admin' && (
-        <div class="admin-floating-btn" onclick={() => window.location.href = '/admin'}>
-          <i class="fas fa-cog"></i>
-          <div class="admin-tooltip">Panel de Administración</div>
-        </div>
-      )}
-      
       <main class="main-content">
         {props.children}
       </main>
@@ -51,12 +47,16 @@ const Home: Component = () => {
         <img src="/images/logo.png" alt="Centro Cultural Banreservas" class="hero-logo" />
         <h1>Bienvenido al Centro Cultural Banreservas</h1>
         <p>Descubre nuestros eventos culturales y regístrate para participar</p>
+        <div class="admin-floating-btn" onclick={() => window.location.href = '/admin'}>
+          <FaSolidGear size={20} color="white" />
+          <div class="admin-tooltip">Panel de Administración</div>
+        </div>
       </div>
       
       <div class="main-actions">
         <div class="action-card" onclick={() => window.location.href = '/eventos-publicos'}>
           <div class="action-icon">
-            <i class="fas fa-calendar-alt"></i>
+            <FaRegularCalendar size={24} color="white" />
           </div>
           <h3>Ver Eventos</h3>
           <p>Explora nuestra programación cultural y reserva tu lugar</p>
@@ -64,7 +64,7 @@ const Home: Component = () => {
         
         <div class="action-card" onclick={() => window.location.href = '/registro'}>
           <div class="action-icon">
-            <i class="fas fa-user-plus"></i>
+            <FaSolidUserPlus size={24} color="white" />
           </div>
           <h3>Registrarse</h3>
           <p>Únete a nuestra comunidad cultural y recibe notificaciones</p>
@@ -72,7 +72,7 @@ const Home: Component = () => {
         
         <div class="action-card" onclick={() => window.location.href = '/visitantes'}>
           <div class="action-icon">
-            <i class="fas fa-check-in"></i>
+            <FaSolidRightToBracket size={24} color="white" />
           </div>
           <h3>Check-in</h3>
           <p>Confirma tu asistencia a eventos y talleres</p>

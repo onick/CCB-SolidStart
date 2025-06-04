@@ -2,6 +2,24 @@ import { Component, createSignal, For, onMount, Show } from 'solid-js';
 import { eventosService } from '../lib/supabase/services';
 import '../styles/admin.css';
 
+// solid-icons for better performance and native Solid.js integration
+import {
+    FaRegularCalendar,
+    FaSolidCalendarXmark,
+    FaSolidChartBar,
+    FaSolidCode,
+    FaSolidDownload,
+    FaSolidGear,
+    FaSolidHouse,
+    FaSolidPenToSquare,
+    FaSolidSpinner,
+    FaSolidTags,
+    FaSolidTicket,
+    FaSolidTrash,
+    FaSolidUsers,
+    FaSolidWandMagicSparkles
+} from 'solid-icons/fa';
+
 // Función para verificar si Supabase está configurado
 const isSupabaseConfigured = () => {
   const url = import.meta.env.VITE_SUPABASE_URL;
@@ -202,6 +220,7 @@ const Eventos: Component = () => {
       setShowCreateModal(false);
       
       console.log('✅ Evento creado exitosamente');
+      alert('✅ ¡Evento creado exitosamente!\n\n📋 El evento aparecerá automáticamente en la página pública:\n🔗 http://localhost:3002/eventos-publicos\n\n💡 Los eventos con estado "activo" son visibles al público.');
     } catch (error) {
       console.error('❌ Error creando evento:', error);
       alert('Error al crear el evento. Por favor intenta de nuevo.');
@@ -303,7 +322,7 @@ const Eventos: Component = () => {
         }
       }
       console.log('🎉 ¡Todos los eventos de prueba han sido creados!');
-      alert('✅ ¡Eventos de prueba creados exitosamente!\n\nRevisa la consola para más detalles.');
+      alert('✅ ¡Eventos de prueba creados exitosamente!\n\n📋 Los eventos aparecerán automáticamente en la página pública:\n🔗 http://localhost:3002/eventos-publicos\n\n💡 Revisa la consola para más detalles.\n🔄 La página pública se actualiza automáticamente cada 30 segundos.');
       
       // Recargar eventos
       await cargarEventos();
@@ -380,16 +399,16 @@ const Eventos: Component = () => {
         <nav class="sidebar-nav">
           <div class="nav-section">
             <div class="nav-section-title">Principal</div>
-            <div class="nav-item" onclick="window.location.href='/admin'" style="cursor: pointer;">
-              <i class="fas fa-home"></i>
+            <div class="nav-item" onclick={() => window.location.href='/admin'} style="cursor: pointer;">
+              <FaSolidHouse size={18} color="white" />
               <span>Dashboard</span>
             </div>
             <div class="nav-item">
-              <i class="fas fa-chart-bar"></i>
+              <FaSolidChartBar size={18} color="white" />
               <span>Reportes</span>
             </div>
             <div class="nav-item">
-              <i class="fas fa-cog"></i>
+              <FaSolidGear size={18} color="white" />
               <span>Configuración</span>
             </div>
           </div>
@@ -397,19 +416,19 @@ const Eventos: Component = () => {
           <div class="nav-section">
             <div class="nav-section-title">Gestionar</div>
             <div class="nav-item active">
-              <i class="fas fa-calendar-alt"></i>
+              <FaRegularCalendar size={18} color="#F39D1E" />
               <span>Eventos</span>
             </div>
             <div class="nav-item">
-              <i class="fas fa-users"></i>
+              <FaSolidUsers size={18} color="white" />
               <span>Visitantes</span>
             </div>
-            <div class="nav-item">
-              <i class="fas fa-ticket-alt"></i>
+            <div class="nav-item" onclick={() => window.location.href='/registros'} style="cursor: pointer;">
+              <FaSolidTicket size={18} color="white" />
               <span>Registros</span>
             </div>
             <div class="nav-item">
-              <i class="fas fa-tags"></i>
+              <FaSolidTags size={18} color="white" />
               <span>Promociones</span>
             </div>
           </div>
@@ -417,11 +436,11 @@ const Eventos: Component = () => {
           <div class="nav-section">
             <div class="nav-section-title">Herramientas</div>
             <div class="nav-item">
-              <i class="fas fa-code"></i>
+              <FaSolidCode size={18} color="white" />
               <span>Integraciones</span>
             </div>
             <div class="nav-item">
-              <i class="fas fa-download"></i>
+              <FaSolidDownload size={18} color="white" />
               <span>Exportar</span>
             </div>
           </div>
@@ -467,7 +486,7 @@ const Eventos: Component = () => {
                   e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.3)';
                 }}
               >
-                <i class="fas fa-magic" style="font-size: 16px;"></i>
+                <FaSolidWandMagicSparkles size={16} color="white" />
                 <span>🎭 Crear Eventos de Prueba</span>
               </button>
               <button 
@@ -518,17 +537,29 @@ const Eventos: Component = () => {
           <div style="background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #92400e; padding: 16px; margin: 20px; border-radius: 12px; border: 1px solid #fcd34d; box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);">
             <div style="display: flex; align-items: center; gap: 12px;">
               <div style="font-size: 24px;">🧪</div>
-              <div>
+              <div style="flex: 1;">
                 <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">
-                  Modo de Prueba Activado
+                  Modo de Prueba Activado - Persistencia en localStorage
                 </div>
                 <div style="font-size: 14px; opacity: 0.9;">
-                  Estás usando datos mock. Para conectar a Supabase real, ve a{' '}
+                  Los eventos se guardan en el navegador para que no se pierdan al recargar.
+                  Para persistencia real en base de datos, ve a{' '}
                   <a href="/setup-supabase" style="color: #92400e; text-decoration: underline; font-weight: 600;">
                     /setup-supabase
                   </a>
                 </div>
               </div>
+              <button 
+                onclick={() => {
+                  if (confirm('¿Estás seguro de que quieres eliminar todos los eventos guardados?')) {
+                    localStorage.removeItem('ccb_eventos_mock');
+                    window.location.reload();
+                  }
+                }}
+                style="background: rgba(146, 64, 14, 0.1); color: #92400e; border: 1px solid rgba(146, 64, 14, 0.3); padding: 8px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;"
+              >
+                🗑️ Limpiar Eventos
+              </button>
             </div>
           </div>
         )}
@@ -613,14 +644,14 @@ const Eventos: Component = () => {
             
             <Show when={isLoading()}>
               <div style="padding: 40px; text-align: center; color: #6B7280;">
-                <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 10px;"></i>
+                <FaSolidSpinner size={24} color="#6B7280" style={{ animation: 'spin 1s linear infinite', 'margin-bottom': '10px' }} />
                 <p>Cargando eventos...</p>
               </div>
             </Show>
 
             <Show when={!isLoading() && filteredEventos().length === 0}>
               <div style="padding: 40px; text-align: center; color: #6B7280;">
-                <i class="fas fa-calendar-times" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                <FaSolidCalendarXmark size={48} color="#6B7280" style={{ 'margin-bottom': '15px', opacity: '0.5' }} />
                 <h3 style="margin: 0 0 10px 0; color: #374151;">No hay eventos</h3>
                 <p style="margin: 0;">No se encontraron eventos que coincidan con los filtros aplicados.</p>
               </div>
@@ -681,13 +712,13 @@ const Eventos: Component = () => {
                           <td style="padding: 12px;">
                             <div style="display: flex; gap: 8px;">
                               <button style="background: #3B82F6; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;">
-                                <i class="fas fa-edit"></i>
+                                <FaSolidPenToSquare size={12} color="white" />
                               </button>
                               <button style="background: #10B981; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;">
-                                <i class="fas fa-users"></i>
+                                <FaSolidUsers size={12} color="white" />
                               </button>
                               <button style="background: #EF4444; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;">
-                                <i class="fas fa-trash"></i>
+                                <FaSolidTrash size={12} color="white" />
                               </button>
                             </div>
                           </td>
