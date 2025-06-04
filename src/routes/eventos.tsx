@@ -9,6 +9,103 @@ const isSupabaseConfigured = () => {
   return url && key && !url.includes('tu-proyecto') && !key.includes('tu-anon-key');
 };
 
+// Función global para crear eventos de prueba
+(window as any).crearEventosDePrueba = async () => {
+  console.log('🎭 Creando eventos de prueba...');
+  
+  const eventosEjemplo = [
+    {
+      titulo: "Concierto de Jazz Contemporáneo",
+      descripcion: "Una noche única con los mejores exponentes del jazz contemporáneo dominicano",
+      categoria: "concierto",
+      fecha: "2024-12-20",
+      hora: "20:00",
+      duracion: 3,
+      ubicacion: "Auditorio Principal",
+      capacidad: 300,
+      registrados: 245,
+      precio: 1500,
+      imagen: "",
+      estado: 'activo' as const
+    },
+    {
+      titulo: "Exposición: Arte Digital Dominicano",
+      descripcion: "Muestra colectiva de artistas dominicanos que exploran las nuevas tecnologías",
+      categoria: "exposicion",
+      fecha: "2024-12-15",
+      hora: "18:00",
+      duracion: 4,
+      ubicacion: "Galería Norte",
+      capacidad: 150,
+      registrados: 89,
+      precio: 800,
+      imagen: "",
+      estado: 'activo' as const
+    },
+    {
+      titulo: "Obra de Teatro: El Quijote Caribeño",
+      descripcion: "Adaptación moderna del clásico de Cervantes ambientada en el Caribe dominicano",
+      categoria: "teatro",
+      fecha: "2024-12-22",
+      hora: "19:30",
+      duracion: 2.5,
+      ubicacion: "Teatro Principal",
+      capacidad: 200,
+      registrados: 156,
+      precio: 1200,
+      imagen: "",
+      estado: 'activo' as const
+    },
+    {
+      titulo: "Taller de Cerámica Taína",
+      descripcion: "Aprende las técnicas ancestrales de cerámica de nuestros pueblos originarios",
+      categoria: "taller",
+      fecha: "2024-12-18",
+      hora: "14:00",
+      duracion: 3,
+      ubicacion: "Aula de Arte",
+      capacidad: 25,
+      registrados: 23,
+      precio: 500,
+      imagen: "",
+      estado: 'activo' as const
+    },
+    {
+      titulo: "Festival de Danza Folklórica",
+      descripcion: "Celebración de las tradiciones dancísticas dominicanas con grupos de todo el país",
+      categoria: "concierto",
+      fecha: "2024-12-28",
+      hora: "17:00",
+      duracion: 4,
+      ubicacion: "Plaza Central",
+      capacidad: 500,
+      registrados: 234,
+      precio: 0,
+      imagen: "",
+      estado: 'activo' as const
+    }
+  ];
+
+  try {
+    for (const evento of eventosEjemplo) {
+      const resultado = await eventosService.crear(evento);
+      if (resultado) {
+        console.log(`✅ Evento creado: ${evento.titulo}`);
+      } else {
+        console.log(`❌ Error creando: ${evento.titulo}`);
+      }
+    }
+    console.log('🎉 ¡Todos los eventos de prueba han sido creados!');
+    console.log('📍 Ve a http://localhost:3001/eventos para verlos en el admin');
+    console.log('📍 Ve a http://localhost:3001/eventos-publicos para verlos en la página pública');
+    
+    // Recargar la página para mostrar los nuevos eventos
+    window.location.reload();
+  } catch (error) {
+    console.error('❌ Error creando eventos de prueba:', error);
+  }
+};
+
 const Eventos: Component = () => {
   const [isAuthenticated, setIsAuthenticated] = createSignal(false);
   const [eventos, setEventos] = createSignal([]);
@@ -30,7 +127,7 @@ const Eventos: Component = () => {
     categoria: 'concierto',
     capacidad: 100,
     estado: 'activo' as 'activo' | 'proximo' | 'completado',
-    precio: 0,
+    cupos: 100,
     imagen: ''
   });
 
@@ -62,8 +159,8 @@ const Eventos: Component = () => {
     
     try {
       const eventosData = await eventosService.obtenerTodos();
-      console.log('📅 Eventos cargados:', eventosData);
       setEventos(eventosData);
+      console.log('📅 Eventos cargados:', eventosData);
     } catch (error) {
       console.error('❌ Error cargando eventos:', error);
     } finally {
@@ -78,7 +175,8 @@ const Eventos: Component = () => {
     try {
       const eventData = {
         ...newEvent(),
-        registrados: 0
+        registrados: 0,
+        precio: 0
       };
       
       console.log('🎭 Creando nuevo evento:', eventData);
@@ -98,7 +196,7 @@ const Eventos: Component = () => {
         categoria: 'concierto',
         capacidad: 100,
         estado: 'activo',
-        precio: 0,
+        cupos: 100,
         imagen: ''
       });
       setShowCreateModal(false);
@@ -117,6 +215,102 @@ const Eventos: Component = () => {
       ...prev,
       [field]: value
     }));
+  };
+
+  const crearEventosDePrueba = async () => {
+    console.log('🎭 Creando eventos de prueba...');
+    
+    const eventosEjemplo = [
+      {
+        titulo: "Concierto de Jazz Contemporáneo",
+        descripcion: "Una noche única con los mejores exponentes del jazz contemporáneo dominicano",
+        categoria: "concierto",
+        fecha: "2024-12-20",
+        hora: "20:00",
+        duracion: 3,
+        ubicacion: "Auditorio Principal",
+        capacidad: 300,
+        registrados: 245,
+        precio: 1500,
+        imagen: "",
+        estado: 'activo' as const
+      },
+      {
+        titulo: "Exposición: Arte Digital Dominicano",
+        descripcion: "Muestra colectiva de artistas dominicanos que exploran las nuevas tecnologías",
+        categoria: "exposicion",
+        fecha: "2024-12-15",
+        hora: "18:00",
+        duracion: 4,
+        ubicacion: "Galería Norte",
+        capacidad: 150,
+        registrados: 89,
+        precio: 800,
+        imagen: "",
+        estado: 'activo' as const
+      },
+      {
+        titulo: "Obra de Teatro: El Quijote Caribeño",
+        descripcion: "Adaptación moderna del clásico de Cervantes ambientada en el Caribe dominicano",
+        categoria: "teatro",
+        fecha: "2024-12-22",
+        hora: "19:30",
+        duracion: 2.5,
+        ubicacion: "Teatro Principal",
+        capacidad: 200,
+        registrados: 156,
+        precio: 1200,
+        imagen: "",
+        estado: 'activo' as const
+      },
+      {
+        titulo: "Taller de Cerámica Taína",
+        descripcion: "Aprende las técnicas ancestrales de cerámica de nuestros pueblos originarios",
+        categoria: "taller",
+        fecha: "2024-12-18",
+        hora: "14:00",
+        duracion: 3,
+        ubicacion: "Aula de Arte",
+        capacidad: 25,
+        registrados: 23,
+        precio: 500,
+        imagen: "",
+        estado: 'activo' as const
+      },
+      {
+        titulo: "Festival de Danza Folklórica",
+        descripcion: "Celebración de las tradiciones dancísticas dominicanas con grupos de todo el país",
+        categoria: "concierto",
+        fecha: "2024-12-28",
+        hora: "17:00",
+        duracion: 4,
+        ubicacion: "Plaza Central",
+        capacidad: 500,
+        registrados: 234,
+        precio: 0,
+        imagen: "",
+        estado: 'activo' as const
+      }
+    ];
+
+    try {
+      for (const evento of eventosEjemplo) {
+        const resultado = await eventosService.crear(evento);
+        if (resultado) {
+          console.log(`✅ Evento creado: ${evento.titulo}`);
+        } else {
+          console.log(`❌ Error creando: ${evento.titulo}`);
+        }
+      }
+      console.log('🎉 ¡Todos los eventos de prueba han sido creados!');
+      alert('✅ ¡Eventos de prueba creados exitosamente!\n\nRevisa la consola para más detalles.');
+      
+      // Recargar eventos
+      await cargarEventos();
+    } catch (error) {
+      console.error('❌ Error creando eventos de prueba:', error);
+      alert('❌ Error creando eventos de prueba. Revisa la consola para más detalles.');
+    }
   };
 
   const handleLogout = () => {
@@ -237,14 +431,47 @@ const Eventos: Component = () => {
       {/* MISMO Main Content que admin.tsx */}
       <main class="admin-main">
         <header class="main-header">
-          <div class="header-left">
-            <div class="breadcrumb">
-              <span>Eventos</span> / <span>Gestión</span> / Centro Cultural Banreservas
+          <div class="header-content">
+            <div class="header-left">
+              <h1 style="margin: 0; color: #1f2937; font-size: 28px; font-weight: 700;">
+                📅 Gestión de Eventos
+              </h1>
+              <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 16px;">
+                Administra los eventos del Centro Cultural Banreservas
+              </p>
             </div>
-            <div class="flex justify-between items-center mb-6">
-              <h1 class="text-3xl font-bold text-gray-800">Gestión de Eventos</h1>
-              <button
-                onClick={() => setShowCreateModal(true)}
+            <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
+              <button 
+                onclick={crearEventosDePrueba}
+                style="
+                  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #5a67d8 100%);
+                  color: white;
+                  padding: 12px 24px;
+                  border: none;
+                  border-radius: 10px;
+                  font-size: 14px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+                  transition: all 0.3s ease;
+                "
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.4)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.3)';
+                }}
+              >
+                <i class="fas fa-magic" style="font-size: 16px;"></i>
+                <span>🎭 Crear Eventos de Prueba</span>
+              </button>
+              <button 
+                onclick={() => setShowCreateModal(true)}
                 class="create-event-btn"
                 style="
                   background: linear-gradient(135deg, #e67e22 0%, #f39c12 50%, #d68910 100%);
@@ -262,7 +489,6 @@ const Eventos: Component = () => {
                   transition: all 0.3s ease;
                   position: relative;
                   overflow: hidden;
-                  margin-left: 40px;
                 "
                 onMouseOver={(e) => {
                   e.currentTarget.style.transform = 'translateY(-2px)';
@@ -285,17 +511,27 @@ const Eventos: Component = () => {
               </button>
             </div>
           </div>
-          <div class="header-right">
-            <button class="btn-header btn-secondary">
-              <i class="fas fa-download"></i>
-              Exportar
-            </button>
-            <button class="btn-header btn-logout" onclick={handleLogout}>
-              <i class="fas fa-sign-out-alt"></i>
-              Cerrar Sesión
-            </button>
-          </div>
         </header>
+
+        {/* Banner informativo para datos mock */}
+        {!import.meta.env.VITE_SUPABASE_URL?.includes('supabase.co') && (
+          <div style="background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #92400e; padding: 16px; margin: 20px; border-radius: 12px; border: 1px solid #fcd34d; box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="font-size: 24px;">🧪</div>
+              <div>
+                <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">
+                  Modo de Prueba Activado
+                </div>
+                <div style="font-size: 14px; opacity: 0.9;">
+                  Estás usando datos mock. Para conectar a Supabase real, ve a{' '}
+                  <a href="/setup-supabase" style="color: #92400e; text-decoration: underline; font-weight: 600;">
+                    /setup-supabase
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div class="main-content">
           {/* Alerta de datos mock */}
@@ -614,15 +850,16 @@ const Eventos: Component = () => {
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                 <div>
                   <label style="display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 6px;">
-                    💰 Precio (COP)
+                    🎫 Cantidad de Cupos
                   </label>
                   <input
                     type="number"
-                    value={newEvent().precio}
-                    onInput={(e) => handleInputChange('precio', parseInt(e.currentTarget.value) || 0)}
-                    min="0"
+                    value={newEvent().cupos}
+                    onInput={(e) => handleInputChange('cupos', parseInt(e.currentTarget.value) || 0)}
+                    min="1"
+                    max="10000"
                     style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box;"
-                    placeholder="0 (Gratis)"
+                    placeholder="100"
                   />
                 </div>
 

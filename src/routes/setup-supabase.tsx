@@ -1,4 +1,6 @@
 import { Component, createSignal, onMount } from 'solid-js';
+import { supabase } from '../lib/supabase/client';
+import { seedDataService } from '../lib/supabase/services';
 import '../styles/admin.css';
 
 const SetupSupabase: Component = () => {
@@ -6,6 +8,10 @@ const SetupSupabase: Component = () => {
   const [supabaseUrl, setSupabaseUrl] = createSignal('');
   const [supabaseKey, setSupabaseKey] = createSignal('');
   const [connectionStatus, setConnectionStatus] = createSignal<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [isConnected, setIsConnected] = createSignal(false);
+  const [isLoading, setIsLoading] = createSignal(true);
+  const [isPoblandoDatos, setIsPoblandoDatos] = createSignal(false);
+  const [mensaje, setMensaje] = createSignal('');
 
   onMount(() => {
     // Cargar valores existentes del .env
@@ -18,6 +24,10 @@ const SetupSupabase: Component = () => {
     if (key && !key.includes('tu-anon-key')) {
       setSupabaseKey(key);
     }
+  });
+
+  onMount(async () => {
+    await verificarConexion();
   });
 
   const testConnection = async () => {
@@ -39,6 +49,41 @@ VITE_SUPABASE_ANON_KEY=${supabaseKey()}`;
     
     navigator.clipboard.writeText(envConfig);
     alert('Configuración copiada al portapapeles');
+  };
+
+  const verificarConexion = async () => {
+    try {
+      const { data, error } = await supabase.from('eventos').select('count').limit(1);
+      if (error) {
+        console.error('Error conectando a Supabase:', error);
+        setIsConnected(false);
+        setMensaje('❌ Error de conexión: ' + error.message);
+      } else {
+        setIsConnected(true);
+        setMensaje('✅ Conexión exitosa a Supabase');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setIsConnected(false);
+      setMensaje('❌ Error de conexión');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const poblarEventosDePrueba = async () => {
+    setIsPoblandoDatos(true);
+    setMensaje('🌱 Poblando eventos de prueba...');
+    
+    try {
+      await seedDataService.poblarDatosIniciales();
+      setMensaje('✅ ¡Eventos de prueba creados exitosamente! Ve a /eventos o /eventos-publicos para verlos.');
+    } catch (error) {
+      console.error('Error poblando datos:', error);
+      setMensaje('❌ Error poblando datos: ' + error.message);
+    } finally {
+      setIsPoblandoDatos(false);
+    }
   };
 
   return (
