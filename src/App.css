@@ -215,13 +215,15 @@ body {
 .action-icon {
   width: 80px;
   height: 80px;
-  background: linear-gradient(135deg, var(--primary-color) 0%, #F99D2A 60%, #4a90e2 100%);
+  background: var(--primary-color);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 20px;
   transition: transform 0.3s ease;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 15px rgba(249, 157, 42, 0.25);
 }
 
 .action-card:hover .action-icon {
