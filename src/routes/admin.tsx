@@ -360,6 +360,14 @@ const Admin: Component = () => {
               <p class="main-subtitle">Gestiona todos los aspectos del Centro Cultural Banreservas</p>
             </div>
             <div class="header-right">
+              <button 
+                class="btn-header btn-success"
+                onclick={() => window.open('/', '_blank')}
+                title="Ver página principal del sitio"
+              >
+                <FaSolidShare size={16} color="white" />
+                Ver Página Principal
+              </button>
               <button class="btn-header btn-secondary">
                 <FaSolidShare size={16} color="white" />
                 Compartir
@@ -396,6 +404,9 @@ const Admin: Component = () => {
             <div class="stats-grid">
               <div class="stat-card">
                 <div class="stat-header">
+                  <div>
+                    <div class="stat-title">Eventos</div>
+                  </div>
                   <div class="stat-icon blue">
                     <FaRegularCalendar size={20} color="white" />
                   </div>
@@ -445,6 +456,7 @@ const Admin: Component = () => {
                 </div>
               </div>
 
+{/* Tarjeta de Ingresos desactivada
               <div class="stat-card">
                 <div class="stat-header">
                   <div>
@@ -462,6 +474,7 @@ const Admin: Component = () => {
                   ↗ {stats().eventos.visitantes} registrados
                 </div>
               </div>
+              */}
 
               <div class="stat-card">
                 <div class="stat-header">

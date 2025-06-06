@@ -1,16 +1,58 @@
+import { useDrag } from 'solid-gesture';
 import { Component, createSignal, For, onMount, Show } from 'solid-js';
+import { FaSolidHouse } from 'solid-icons/fa';
 import { eventosService } from '../lib/supabase/services';
 import '../styles/global.css';
 
 const EventosPublicos: Component = () => {
-  const [eventos, setEventos] = createSignal([]);
+  const [eventos, setEventos] = createSignal<any[]>([]);
   const [isLoading, setIsLoading] = createSignal(true);
   const [activeFilter, setActiveFilter] = createSignal('todos');
   const [showRegistroModal, setShowRegistroModal] = createSignal(false);
-  const [selectedEvento, setSelectedEvento] = createSignal(null);
-  const [showSyncInfo, setShowSyncInfo] = createSignal(true);
+  const [selectedEvento, setSelectedEvento] = createSignal<any>(null);
+  const [showSyncInfo, setShowSyncInfo] = createSignal(false);
+  
+  // Estados para gestos de swipe
+  const [currentEventIndex, setCurrentEventIndex] = createSignal(0);
+  const [swipeOffset, setSwipeOffset] = createSignal(0);
+  const [isSwipeMode, setIsSwipeMode] = createSignal(false);
+
+  // Agregar estilos CSS para la aplicación
+  const addStyles = () => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes fadeInOut {
+        0%, 100% { opacity: 0.7; }
+        50% { opacity: 1; }
+      }
+      
+      @media (max-width: 768px) {
+        .mobile-swipe-container {
+          display: block !important;
+        }
+        .desktop-grid {
+          display: none !important;
+        }
+      }
+      
+      @media (min-width: 769px) {
+        .mobile-swipe-container {
+          display: none !important;
+        }
+        .desktop-grid {
+          display: grid !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  };
 
   onMount(async () => {
+    addStyles();
+    await loadEventos();
+  });
+
+  const loadEventos = async () => {
     console.log('📅 Cargando eventos públicos...');
     try {
       const eventosData = await eventosService.obtenerTodos();
@@ -26,7 +68,7 @@ const EventosPublicos: Component = () => {
     } finally {
       setIsLoading(false);
     }
-  });
+  };
 
   // Función para recargar eventos (útil para sincronización)
   const recargarEventos = async () => {
@@ -137,6 +179,99 @@ const EventosPublicos: Component = () => {
     });
   };
 
+  // Función para determinar estado de disponibilidad del evento
+  const obtenerEstadoDisponibilidad = (evento: any) => {
+    const cuposDisponibles = evento.cupos_disponibles ?? (evento.capacidad - evento.registrados);
+    const capacidad = evento.capacidad_maxima ?? evento.capacidad ?? 200;
+    const registrados = evento.registrados ?? 0;
+    const porcentajeOcupacion = (registrados / capacidad) * 100;
+    
+    if (cuposDisponibles <= 0 || evento.esta_lleno === true) {
+      return {
+        disponible: false,
+        estado: 'agotado',
+        cuposDisponibles: 0,
+        mensaje: 'Evento Agotado',
+        color: '#EF4444',
+        bgColor: '#FEE2E2',
+        icono: '🚫'
+      };
+    } else if (cuposDisponibles <= 5 || porcentajeOcupacion >= 90) {
+      return {
+        disponible: true,
+        estado: 'ultimos_cupos',
+        cuposDisponibles,
+        mensaje: `¡Últimos ${cuposDisponibles} cupos!`,
+        color: '#F59E0B',
+        bgColor: '#FEF3C7',
+        icono: '⚡'
+      };
+    } else {
+      return {
+        disponible: true,
+        estado: 'disponible',
+        cuposDisponibles,
+        mensaje: `${cuposDisponibles} cupos disponibles`,
+        color: '#059669',
+        bgColor: '#D1FAE5',
+        icono: '✅'
+      };
+    }
+  };
+
+  // Funciones para navegación con gestos
+  const goToNextEvent = () => {
+    const filtered = filteredEventos();
+    if (filtered.length > 0) {
+      setCurrentEventIndex((prev) => (prev + 1) % filtered.length);
+    }
+  };
+
+  const goToPrevEvent = () => {
+    const filtered = filteredEventos();
+    if (filtered.length > 0) {
+      setCurrentEventIndex((prev) => (prev - 1 + filtered.length) % filtered.length);
+    }
+  };
+
+  // Configuración del gesto de drag
+  const bind = useDrag(({ down, movement: [mx, my], velocity: [vx], direction: [dx] }) => {
+    const filtered = filteredEventos();
+    if (filtered.length === 0) return;
+
+    // Solo activar swipe mode en móvil/touch devices
+    if (down && !isSwipeMode()) {
+      setIsSwipeMode(true);
+    }
+
+    if (down) {
+      // Durante el arrastre, mostrar el offset
+      setSwipeOffset(mx);
+    } else {
+      // Al soltar, decidir si cambiar de evento
+      const threshold = 50; // Umbral mínimo para cambiar evento
+      const speedThreshold = 0.2; // Velocidad mínima
+
+      if (Math.abs(mx) > threshold || Math.abs(vx) > speedThreshold) {
+        if (dx > 0) {
+          // Swipe hacia la derecha (evento anterior)
+          goToPrevEvent();
+        } else {
+          // Swipe hacia la izquierda (evento siguiente)
+          goToNextEvent();
+        }
+      }
+
+      // Resetear offset y swipe mode
+      setSwipeOffset(0);
+      setTimeout(() => setIsSwipeMode(false), 300);
+    }
+  }, {
+    axis: 'x', // Solo permitir swipe horizontal
+    preventScroll: false, // No prevenir scroll vertical
+    threshold: 10 // Threshold para iniciar drag
+  });
+
   return (
     <div style="min-height: 100vh; background: #F8FAFC; margin: 0; padding: 0;">
       {/* Header Azul pegado al borde superior */}
@@ -156,7 +291,22 @@ const EventosPublicos: Component = () => {
           <span style="color: white; font-size: 1.8rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.2); letter-spacing: 0.5px;">Próximas actividades</span>
         </div>
         
-        <div style="display: flex; align-items: center; gap: 2rem;">
+        <div style="display: flex; align-items: center; gap: 1.5rem;">
+          <button 
+            onclick={() => window.location.href = '/'}
+            style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 0.6rem; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;"
+            onMouseEnter={(e) => {
+              (e.target as HTMLButtonElement).style.background = 'rgba(255,255,255,0.3)';
+              (e.target as HTMLButtonElement).style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLButtonElement).style.background = 'rgba(255,255,255,0.2)';
+              (e.target as HTMLButtonElement).style.transform = 'scale(1)';
+            }}
+            title="Ir a la página principal"
+          >
+            <FaSolidHouse size={20} color="white" />
+          </button>
           <button 
             onclick={recargarEventos}
             style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;"
@@ -299,8 +449,251 @@ const EventosPublicos: Component = () => {
 
         {/* Lista de Eventos */}
         <Show when={!isLoading() && filteredEventos().length > 0}>
-          <div class="eventos-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; max-width: none; padding: 0.75rem;">
-            <For each={filteredEventos()}>
+          <div style="padding: 0.75rem;">
+            
+            {/* Navegación de eventos en móvil con swipe */}
+            <div class="mobile-swipe-container">
+              {/* Indicador de evento actual */}
+              <div style="text-align: center; margin-bottom: 1rem;">
+                <span style="color: #6B7280; font-size: 0.9rem; font-weight: 500;">
+                  Evento {currentEventIndex() + 1} de {filteredEventos().length}
+                </span>
+                <div style="display: flex; justify-content: center; gap: 0.25rem; margin-top: 0.5rem;">
+                  <For each={filteredEventos()}>
+                    {(_, index) => (
+                      <div 
+                        style={`width: 6px; height: 6px; border-radius: 50%; transition: all 0.3s; ${
+                          index() === currentEventIndex() 
+                            ? 'background: #0EA5E9;' 
+                            : 'background: #E5E7EB;'
+                        }`}
+                      />
+                    )}
+                  </For>
+                </div>
+              </div>
+
+              {/* Hint de swipe */}
+              <Show when={!isSwipeMode()}>
+                <div style="text-align: center; margin-bottom: 1rem; opacity: 0.7; animation: fadeInOut 2s infinite;">
+                  <span style="color: #6B7280; font-size: 0.8rem;">
+                    👆 Desliza para ver más eventos
+                  </span>
+                </div>
+              </Show>
+
+              {/* Contenedor de evento con swipe */}
+              <div 
+                {...bind()}
+                style={`
+                  position: relative; 
+                  overflow: hidden; 
+                  touch-action: pan-y;
+                  transform: translateX(${swipeOffset()}px);
+                  transition: ${isSwipeMode() ? 'none' : 'transform 0.3s ease'};
+                `}
+              >
+                <Show when={filteredEventos()[currentEventIndex()]} keyed>
+                  {(evento) => {
+                    const dateInfo = formatDate(evento.fecha);
+                    const statusInfo = getEventStatus(evento);
+                    
+                    // Función para obtener el estilo de la categoría del evento
+                    const getCategoryStyle = (titulo: string) => {
+                      const tituloLower = titulo.toLowerCase();
+                      
+                      if (tituloLower.includes('concierto') || tituloLower.includes('música') || tituloLower.includes('jazz')) {
+                        return { 
+                          bg: 'linear-gradient(135deg, #06B6D4, #0891B2)', 
+                          icon: '🎵', 
+                          label: 'MÚSICA',
+                          labelColor: '#06B6D4'
+                        };
+                      } else if (tituloLower.includes('exposición') || tituloLower.includes('arte') || tituloLower.includes('galería')) {
+                        return { 
+                          bg: 'linear-gradient(135deg, #F59E0B, #D97706)', 
+                          icon: '🎨', 
+                          label: 'ARTE VISUAL',
+                          labelColor: '#F59E0B'
+                        };
+                      } else if (tituloLower.includes('teatro') || tituloLower.includes('obra')) {
+                        return { 
+                          bg: 'linear-gradient(135deg, #8B5CF6, #7C3AED)', 
+                          icon: '🎭', 
+                          label: 'TEATRO',
+                          labelColor: '#8B5CF6'
+                        };
+                      } else if (tituloLower.includes('taller') || tituloLower.includes('cerámica') || tituloLower.includes('fotografía')) {
+                        return { 
+                          bg: 'linear-gradient(135deg, #EF4444, #DC2626)', 
+                          icon: '🛠️', 
+                          label: 'TALLER',
+                          labelColor: '#EF4444'
+                        };
+                      } else if (tituloLower.includes('conferencia') || tituloLower.includes('historia')) {
+                        return { 
+                          bg: 'linear-gradient(135deg, #10B981, #059669)', 
+                          icon: '🎤', 
+                          label: 'CONFERENCIA',
+                          labelColor: '#10B981'
+                        };
+                      } else if (tituloLower.includes('festival') || tituloLower.includes('danza') || tituloLower.includes('literatura')) {
+                        return { 
+                          bg: 'linear-gradient(135deg, #8B5CF6, #7C3AED)', 
+                          icon: '📚', 
+                          label: 'LITERATURA',
+                          labelColor: '#8B5CF6'
+                        };
+                      } else {
+                        return { 
+                          bg: 'linear-gradient(135deg, #6B7280, #4B5563)', 
+                          icon: '🎪', 
+                          label: 'EVENTO',
+                          labelColor: '#6B7280'
+                        };
+                      }
+                    };
+                    
+                    const categoryStyle = getCategoryStyle(evento.titulo);
+                    
+                    return (
+                      <div 
+                        style="background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 25px rgba(0,0,0,0.1); border: none; cursor: pointer; transition: all 0.3s ease; width: 100%; margin: 0 auto; max-width: 400px;"
+                        onclick={() => openRegistroModal(evento)}
+                      >
+                        {/* Header con imagen o color de categoría e icono */}
+                        <div style={`${evento.imagen 
+                          ? `background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.5)), url('${evento.imagen}'); background-size: cover; background-position: center;` 
+                          : `background: ${categoryStyle.bg};`
+                        } padding: 2.5rem; position: relative; min-height: 160px; display: flex; align-items: center; justify-content: center;`}>
+                          {/* Etiqueta de categoría */}
+                          <div style="position: absolute; top: 1rem; left: 1rem;">
+                            <span style="background: rgba(255,255,255,0.9); color: #374151; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px;">
+                              {categoryStyle.label}
+                            </span>
+                          </div>
+                          
+                          {/* Status badge */}
+                          <div style="position: absolute; top: 1rem; right: 1rem;">
+                            <span style={`background: ${statusInfo.bgColor}; color: ${statusInfo.color}; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600;`}>
+                              {statusInfo.status}
+                            </span>
+                          </div>
+                          
+                          {/* Icono central (solo si no hay imagen) */}
+                          {!evento.imagen && (
+                            <div style="font-size: 3rem; opacity: 0.9;">
+                              {categoryStyle.icon}
+                            </div>
+                          )}
+                          
+                          {/* Overlay para mejorar legibilidad con imagen */}
+                          {evento.imagen && (
+                            <div style="position: absolute; inset: 0; background: linear-gradient(45deg, rgba(0,0,0,0.1), rgba(0,0,0,0.3)); pointer-events: none;"></div>
+                          )}
+                        </div>
+
+                        {/* Contenido de la tarjeta */}
+                        <div style="padding: 2rem;">
+                          {/* Título */}
+                          <h3 style="color: #1F2937; font-size: 1.1rem; font-weight: 600; margin: 0 0 1rem 0; line-height: 1.4;">
+                            {evento.titulo}
+                          </h3>
+
+                          {/* Información del evento */}
+                          <div style="margin-bottom: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                              <span style="color: #F59E0B;">📅</span>
+                              <span style="color: #6B7280; font-size: 0.85rem; font-weight: 500;">{formatDate(evento.fecha).day} de {formatDate(evento.fecha).month}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                              <span style="color: #F59E0B;">🕐</span>
+                              <span style="color: #6B7280; font-size: 0.85rem;">{formatTime(evento.hora)}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                              <span style="color: #F59E0B;">📍</span>
+                              <span style="color: #6B7280; font-size: 0.85rem;">{evento.ubicacion}</span>
+                            </div>
+                          </div>
+
+                          {/* Precio */}
+                          <div style="margin: 1rem 0;">
+                            <div style="background: #D1FAE5; color: #059669; padding: 0.5rem 1rem; border-radius: 8px; text-align: center; font-weight: 600; font-size: 0.9rem;">
+                              💳 Entrada Libre
+                            </div>
+                          </div>
+
+                          {/* Disponibilidad Dinámica */}
+                          <div style="margin-bottom: 1rem;">
+                            {(() => {
+                              const estadoDisponibilidad = obtenerEstadoDisponibilidad(evento);
+                              const capacidad = evento.capacidad_maxima ?? evento.capacidad ?? 200;
+                              const registrados = evento.registrados ?? 0;
+                              const porcentajeOcupacion = (registrados / capacidad) * 100;
+                              
+                              return (
+                                <div>
+                                  {/* Estado visual */}
+                                  <div style={`background: ${estadoDisponibilidad.bgColor}; color: ${estadoDisponibilidad.color}; padding: 0.5rem 1rem; border-radius: 8px; text-align: center; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;`}>
+                                    {estadoDisponibilidad.icono} {estadoDisponibilidad.mensaje}
+                                  </div>
+                                  
+                                  {/* Barra de progreso */}
+                                  <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6B7280; margin-bottom: 0.3rem;">
+                                    <span>{registrados} registrados</span>
+                                    <span>{capacidad} capacidad total</span>
+                                  </div>
+                                  <div style="background: #F3F4F6; height: 8px; border-radius: 4px; overflow: hidden;">
+                                    <div style={`
+                                      background: ${
+                                        estadoDisponibilidad.estado === 'agotado' 
+                                          ? 'linear-gradient(90deg, #EF4444, #DC2626)' 
+                                          : estadoDisponibilidad.estado === 'ultimos_cupos'
+                                          ? 'linear-gradient(90deg, #F59E0B, #F97316)'
+                                          : 'linear-gradient(90deg, #059669, #047857)'
+                                      }; 
+                                      height: 100%; 
+                                      width: ${Math.min(porcentajeOcupacion, 100)}%; 
+                                      border-radius: 4px;
+                                      transition: all 0.3s;
+                                    `}></div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }}
+                </Show>
+              </div>
+
+              {/* Botones de navegación */}
+              <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 1.5rem;">
+                <button 
+                  onclick={goToPrevEvent}
+                  style="background: #0EA5E9; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 12px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;"
+                  disabled={currentEventIndex() === 0}
+                >
+                  ← Anterior
+                </button>
+                <button 
+                  onclick={goToNextEvent}
+                  style="background: #0EA5E9; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 12px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;"
+                  disabled={currentEventIndex() === filteredEventos().length - 1}
+                >
+                  Siguiente →
+                </button>
+              </div>
+            </div>
+
+            {/* Grid de eventos en desktop */}
+            <div 
+              class="desktop-grid" 
+              style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; padding: 0.5rem;"
+            >
+              <For each={filteredEventos()}>
               {(evento) => {
                 const dateInfo = formatDate(evento.fecha);
                 const statusInfo = getEventStatus(evento);
@@ -364,7 +757,7 @@ const EventosPublicos: Component = () => {
                 const categoryStyle = getCategoryStyle(evento.titulo);
                 
                 return (
-                  <div 
+                    <div 
                     style="background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 25px rgba(0,0,0,0.1); border: none; cursor: pointer; transition: all 0.3s ease; width: 100%;"
                     onclick={() => openRegistroModal(evento)}
                     onMouseEnter={(e) => {
@@ -376,8 +769,11 @@ const EventosPublicos: Component = () => {
                       (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
                     }}
                   >
-                    {/* Header con color de categoría e icono */}
-                    <div style={`background: ${categoryStyle.bg}; padding: 2.5rem; position: relative; min-height: 160px; display: flex; align-items: center; justify-content: center;`}>
+                    {/* Header con imagen o color de categoría e icono */}
+                    <div style={`${evento.imagen 
+                      ? `background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.5)), url('${evento.imagen}'); background-size: cover; background-position: center;` 
+                      : `background: ${categoryStyle.bg};`
+                    } padding: 2.5rem; position: relative; min-height: 160px; display: flex; align-items: center; justify-content: center;`}>
                       {/* Etiqueta de categoría */}
                       <div style="position: absolute; top: 1rem; left: 1rem;">
                         <span style="background: rgba(255,255,255,0.9); color: #374151; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px;">
@@ -387,15 +783,22 @@ const EventosPublicos: Component = () => {
                       
                       {/* Status badge */}
                       <div style="position: absolute; top: 1rem; right: 1rem;">
-                        <span style="background: rgba(255,255,255,0.9); color: #6B7280; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600;">
-                          Finalizado
+                        <span style={`background: ${statusInfo.bgColor}; color: ${statusInfo.color}; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600;`}>
+                          {statusInfo.status}
                         </span>
                       </div>
                       
-                      {/* Icono central */}
-                      <div style="font-size: 3rem; opacity: 0.9;">
-                        {categoryStyle.icon}
-                      </div>
+                      {/* Icono central (solo si no hay imagen) */}
+                      {!evento.imagen && (
+                        <div style="font-size: 3rem; opacity: 0.9;">
+                          {categoryStyle.icon}
+                        </div>
+                      )}
+                      
+                      {/* Overlay para mejorar legibilidad con imagen */}
+                      {evento.imagen && (
+                        <div style="position: absolute; inset: 0; background: linear-gradient(45deg, rgba(0,0,0,0.1), rgba(0,0,0,0.3)); pointer-events: none;"></div>
+                      )}
                     </div>
 
                     {/* Contenido de la tarjeta */}
@@ -409,11 +812,11 @@ const EventosPublicos: Component = () => {
                       <div style="margin-bottom: 1rem;">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                           <span style="color: #F59E0B;">📅</span>
-                          <span style="color: #6B7280; font-size: 0.85rem; font-weight: 500;">sábado, 14 de junio de 2025</span>
+                          <span style="color: #6B7280; font-size: 0.85rem; font-weight: 500;">{formatDate(evento.fecha).day} de {formatDate(evento.fecha).month}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                           <span style="color: #F59E0B;">🕐</span>
-                          <span style="color: #6B7280; font-size: 0.85rem;">19:30</span>
+                          <span style="color: #6B7280; font-size: 0.85rem;">{formatTime(evento.hora)}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                           <span style="color: #F59E0B;">📍</span>
@@ -431,19 +834,18 @@ const EventosPublicos: Component = () => {
                       {/* Disponibilidad */}
                       <div style="margin-bottom: 1rem;">
                         <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6B7280; margin-bottom: 0.3rem;">
-                          <span>150 cupos disponibles de 200</span>
+                          <span>{evento.cupos_disponibles || 150} cupos disponibles de {evento.capacidad_maxima || 200}</span>
                         </div>
                         <div style="background: #F3F4F6; height: 6px; border-radius: 3px; overflow: hidden;">
-                          <div style="background: linear-gradient(90deg, #F59E0B, #F97316); height: 100%; width: 75%; border-radius: 3px;"></div>
+                          <div style={`background: linear-gradient(90deg, #F59E0B, #F97316); height: 100%; width: ${((evento.cupos_disponibles || 150) / (evento.capacidad_maxima || 200)) * 100}%; border-radius: 3px;`}></div>
                         </div>
                       </div>
-
-
                     </div>
                   </div>
                 );
               }}
             </For>
+            </div>
           </div>
         </Show>
       </main>
@@ -542,27 +944,65 @@ const EventosPublicos: Component = () => {
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit"
-                  onclick={(e) => {
-                    e.preventDefault();
-                    console.log('Procesando registro...', {
-                      evento: selectedEvento(),
-                      esActivo: selectedEvento() && isEventoActivo(selectedEvento())
-                    });
-                    alert('¡Registro procesado! (Demo)');
-                    setShowRegistroModal(false);
-                  }}
-                  style="flex: 2; padding: 0.75rem; border: none; background: #0EA5E9; color: white; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;"
-                  onMouseEnter={(e) => {
-                    (e.target as HTMLButtonElement).style.background = '#0284C7';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.target as HTMLButtonElement).style.background = '#0EA5E9';
-                  }}
-                >
-                  Registrarse
-                </button>
+                {(() => {
+                  const estadoDisponibilidad = selectedEvento() ? obtenerEstadoDisponibilidad(selectedEvento()) : { disponible: true, estado: 'disponible', mensaje: 'Disponible' };
+                  const estaDisponible = estadoDisponibilidad.disponible;
+                  
+                  return (
+                    <button 
+                      type="submit"
+                      disabled={!estaDisponible}
+                      onclick={(e) => {
+                        e.preventDefault();
+                        
+                        if (!estaDisponible) {
+                          alert('❌ Lo sentimos, este evento ha alcanzado su capacidad máxima y no tiene cupos disponibles.');
+                          return;
+                        }
+                        
+                        console.log('Procesando registro...', {
+                          evento: selectedEvento(),
+                          disponibilidad: estadoDisponibilidad,
+                          esActivo: selectedEvento() && isEventoActivo(selectedEvento())
+                        });
+                        
+                        // Simular registro exitoso
+                        alert(`✅ ¡Registro procesado exitosamente! ${estadoDisponibilidad.cuposDisponibles - 1} cupos restantes.`);
+                        setShowRegistroModal(false);
+                        
+                        // Recargar eventos para actualizar contadores
+                        recargarEventos();
+                      }}
+                      style={`
+                        flex: 2; 
+                        padding: 0.75rem; 
+                        border: none; 
+                        background: ${estaDisponible ? '#0EA5E9' : '#9CA3AF'}; 
+                        color: white; 
+                        border-radius: 8px; 
+                        font-size: 0.9rem; 
+                        font-weight: 600; 
+                        cursor: ${estaDisponible ? 'pointer' : 'not-allowed'}; 
+                        transition: all 0.2s;
+                        opacity: ${estaDisponible ? '1' : '0.6'};
+                      `}
+                      onMouseEnter={(e) => {
+                        if (estaDisponible) {
+                          (e.target as HTMLButtonElement).style.background = '#0284C7';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (estaDisponible) {
+                          (e.target as HTMLButtonElement).style.background = '#0EA5E9';
+                        } else {
+                          (e.target as HTMLButtonElement).style.background = '#9CA3AF';
+                        }
+                      }}
+                    >
+                      {estaDisponible ? 'Registrarse' : 'Evento Agotado'}
+                    </button>
+                  );
+                })()}
               </div>
             </form>
           </div>

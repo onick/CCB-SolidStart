@@ -71,7 +71,7 @@ const mockEventos: Evento[] = [
     duracion: 3,
     ubicacion: "Aula de Arte",
     capacidad: 25,
-    registrados: 23,
+    registrados: 25, // Evento AGOTADO para demostrar funcionalidad
     precio: 500,
     imagen: "",
     estado: 'activo' as const,
@@ -90,6 +90,23 @@ const mockEventos: Evento[] = [
     capacidad: 500,
     registrados: 234,
     precio: 0,
+    imagen: "",
+    estado: 'activo' as const,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: '6',
+    titulo: "Conferencia: Tecnología y Arte",
+    descripcion: "Mesa redonda sobre el impacto de la tecnología en las expresiones artísticas contemporáneas",
+    categoria: "conferencia",
+    fecha: "2024-12-25",
+    hora: "16:00",
+    duracion: 2,
+    ubicacion: "Sala de Conferencias",
+    capacidad: 50,
+    registrados: 47, // Últimos 3 cupos para demostrar funcionalidad
+    precio: 300,
     imagen: "",
     estado: 'activo' as const,
     created_at: new Date().toISOString(),
@@ -128,6 +145,77 @@ const guardarEventosEnStorage = (eventos: Evento[]) => {
 
 // Inicializar eventos desde localStorage
 eventosMockDinamicos = cargarEventosDelStorage();
+
+// =============================================
+// FUNCIONES AUXILIARES PARA MANEJO DE CUPOS
+// =============================================
+
+// Verificar si un evento tiene cupos disponibles
+const verificarDisponibilidad = (eventoId: string): { disponible: boolean; cuposLibres: number; capacidad: number; registrados: number } => {
+  const evento = eventosMockDinamicos.find(e => e.id === eventoId);
+  if (!evento) {
+    return { disponible: false, cuposLibres: 0, capacidad: 0, registrados: 0 };
+  }
+  
+  const cuposLibres = evento.capacidad - evento.registrados;
+  return {
+    disponible: cuposLibres > 0,
+    cuposLibres: Math.max(0, cuposLibres),
+    capacidad: evento.capacidad,
+    registrados: evento.registrados
+  };
+};
+
+// Actualizar contador de registrados para un evento
+const actualizarContadorRegistrados = (eventoId: string, incremento: number = 1): boolean => {
+  const eventoIndex = eventosMockDinamicos.findIndex(e => e.id === eventoId);
+  if (eventoIndex === -1) return false;
+  
+  const evento = eventosMockDinamicos[eventoIndex];
+  const nuevosRegistrados = evento.registrados + incremento;
+  
+  // Validar que no exceda la capacidad (a menos que sea un decremento)
+  if (incremento > 0 && nuevosRegistrados > evento.capacidad) {
+    console.warn(`⚠️ No se puede registrar: evento ${eventoId} alcanzó su capacidad máxima`);
+    return false;
+  }
+  
+  // Validar que no sea negativo
+  if (nuevosRegistrados < 0) {
+    console.warn(`⚠️ No se puede decrementar: registrados no puede ser negativo`);
+    return false;
+  }
+  
+  // Actualizar el contador
+  eventosMockDinamicos[eventoIndex] = {
+    ...evento,
+    registrados: nuevosRegistrados,
+    updated_at: new Date().toISOString()
+  };
+  
+  // Guardar en localStorage
+  guardarEventosEnStorage(eventosMockDinamicos);
+  
+  console.log(`✅ Contador actualizado para evento ${eventoId}: ${evento.registrados} -> ${nuevosRegistrados}`);
+  return true;
+};
+
+// Determinar estado dinámico del evento (incluyendo "agotado")
+const determinarEstadoEvento = (evento: Evento): 'activo' | 'proximo' | 'completado' | 'agotado' => {
+  // Primero verificar si está agotado
+  if (evento.registrados >= evento.capacidad) {
+    return 'agotado';
+  }
+  
+  // Luego verificar estados temporales
+  const fechaEvento = new Date(`${evento.fecha} ${evento.hora}`);
+  const ahora = new Date();
+  const fechaFin = new Date(fechaEvento.getTime() + evento.duracion * 60 * 60 * 1000);
+  
+  if (ahora < fechaEvento) return 'proximo';
+  if (ahora > fechaFin) return 'completado';
+  return 'activo';
+};
 
 // =============================================
 // SERVICIOS DE VISITANTES
@@ -221,7 +309,25 @@ export const eventosService = {
     // Si Supabase no está configurado, usar datos mock
     if (!isSupabaseConfigured()) {
       console.log('🧪 Usando datos mock para eventos (Supabase no configurado)');
-      return eventosMockDinamicos;
+      
+      // Enriquecer eventos con información de disponibilidad
+      const eventosEnriquecidos = eventosMockDinamicos.map(evento => {
+        const disponibilidad = verificarDisponibilidad(evento.id);
+        const estadoDinamico = determinarEstadoEvento(evento);
+        
+        return {
+          ...evento,
+          // Agregar campos de disponibilidad
+          cupos_disponibles: disponibilidad.cuposLibres,
+          capacidad_maxima: disponibilidad.capacidad,
+          esta_lleno: !disponibilidad.disponible,
+          estado_dinamico: estadoDinamico,
+          // Mantener el estado original también
+          estado_original: evento.estado
+        };
+      });
+      
+      return eventosEnriquecidos;
     }
 
     const { data, error } = await supabase
@@ -232,9 +338,26 @@ export const eventosService = {
     if (error) {
       console.error('Error obteniendo eventos:', error);
       console.log('🧪 Fallback a datos mock debido a error');
-      return eventosMockDinamicos;
+      
+      // En caso de error, también devolver datos enriquecidos
+      const eventosEnriquecidos = eventosMockDinamicos.map(evento => {
+        const disponibilidad = verificarDisponibilidad(evento.id);
+        const estadoDinamico = determinarEstadoEvento(evento);
+        
+        return {
+          ...evento,
+          cupos_disponibles: disponibilidad.cuposLibres,
+          capacidad_maxima: disponibilidad.capacidad,
+          esta_lleno: !disponibilidad.disponible,
+          estado_dinamico: estadoDinamico,
+          estado_original: evento.estado
+        };
+      });
+      
+      return eventosEnriquecidos;
     }
     
+    // Para datos reales de Supabase, también enriquecer si es necesario
     return data || [];
   },
 
@@ -331,6 +454,105 @@ export const eventosService = {
     }
     
     return data;
+  },
+
+  // Actualizar la capacidad de un evento y validar registros existentes
+  async actualizarCapacidad(eventoId: string, nuevaCapacidad: number): Promise<boolean> {
+    if (!isSupabaseConfigured()) {
+      console.log(`🧪 Actualizando capacidad mock para evento ${eventoId}: ${nuevaCapacidad}`);
+      
+      const eventoIndex = eventosMockDinamicos.findIndex(e => e.id === eventoId);
+      if (eventoIndex === -1) {
+        console.warn(`⚠️ Evento ${eventoId} no encontrado para actualizar capacidad`);
+        return false;
+      }
+      
+      const evento = eventosMockDinamicos[eventoIndex];
+      
+      // Validar que la nueva capacidad sea mayor o igual a los registrados actuales
+      if (nuevaCapacidad < evento.registrados) {
+        console.warn(`⚠️ No se puede reducir la capacidad a ${nuevaCapacidad}: ya hay ${evento.registrados} personas registradas`);
+        return false;
+      }
+      
+      // Actualizar capacidad
+      eventosMockDinamicos[eventoIndex] = {
+        ...evento,
+        capacidad: nuevaCapacidad,
+        updated_at: new Date().toISOString()
+      };
+      
+      guardarEventosEnStorage(eventosMockDinamicos);
+      console.log(`✅ Capacidad actualizada para evento ${eventoId}: ${evento.capacidad} -> ${nuevaCapacidad}`);
+      return true;
+    }
+
+    const { error } = await supabase
+      .from('eventos')
+      .update({ capacidad: nuevaCapacidad })
+      .eq('id', eventoId);
+    
+    return !error;
+  },
+
+  // Eliminar un evento
+  async eliminar(id: string): Promise<boolean> {
+    if (!isSupabaseConfigured()) {
+      console.log(`🗑️ Eliminando evento mock: ${id}`);
+      
+      const eventoIndex = eventosMockDinamicos.findIndex(e => e.id === id);
+      if (eventoIndex === -1) {
+        console.warn(`⚠️ Evento ${id} no encontrado para eliminar`);
+        return false;
+      }
+      
+      // Eliminar el evento del array
+      eventosMockDinamicos.splice(eventoIndex, 1);
+      
+      // Guardar cambios en localStorage
+      guardarEventosEnStorage(eventosMockDinamicos);
+      console.log(`✅ Evento ${id} eliminado exitosamente`);
+      return true;
+    }
+
+    // Implementación para Supabase
+    const { error } = await supabase
+      .from('eventos')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error eliminando evento:', error);
+      return false;
+    }
+    
+    console.log(`✅ Evento ${id} eliminado de Supabase`);
+    return true;
+  },
+
+  // Obtener información detallada de disponibilidad para un evento
+  async obtenerDisponibilidad(eventoId: string): Promise<{
+    disponible: boolean;
+    cuposLibres: number;
+    capacidad: number;
+    registrados: number;
+    estadoDinamico: string;
+  } | null> {
+    if (!isSupabaseConfigured()) {
+      const evento = eventosMockDinamicos.find(e => e.id === eventoId);
+      if (!evento) return null;
+      
+      const disponibilidad = verificarDisponibilidad(eventoId);
+      const estadoDinamico = determinarEstadoEvento(evento);
+      
+      return {
+        ...disponibilidad,
+        estadoDinamico
+      };
+    }
+    
+    // Implementación para Supabase (cuando esté configurado)
+    return null;
   },
 
   async obtenerEstadisticas() {
@@ -463,6 +685,18 @@ export const registroEventosService = {
     // Si Supabase no está configurado, simular registro en mock
     if (!isSupabaseConfigured()) {
       console.log('🧪 Simulando registro de visitante en evento (mock)');
+      
+      // 🔒 VALIDAR DISPONIBILIDAD ANTES DEL REGISTRO
+      const disponibilidad = verificarDisponibilidad(eventoId);
+      if (!disponibilidad.disponible) {
+        console.warn(`❌ Registro rechazado: evento ${eventoId} no tiene cupos disponibles`);
+        console.warn(`📊 Estado: ${disponibilidad.registrados}/${disponibilidad.capacidad} registrados`);
+        throw new Error(`Lo sentimos, este evento ha alcanzado su capacidad máxima (${disponibilidad.capacidad} personas). No hay cupos disponibles.`);
+      }
+      
+      // ✅ HAY CUPOS DISPONIBLES - PROCEDER CON EL REGISTRO
+      console.log(`✅ Registro permitido: ${disponibilidad.cuposLibres} cupos disponibles para evento ${eventoId}`);
+      
       const nuevoRegistro: RegistroEvento = {
         id: `mock-${Date.now()}`,
         visitante_id: visitanteId,
@@ -472,9 +706,22 @@ export const registroEventosService = {
         estado: 'confirmado' as const,
         created_at: new Date().toISOString()
       };
+      
+      // 📈 ACTUALIZAR CONTADOR DE REGISTRADOS
+      const actualizacionExitosa = actualizarContadorRegistrados(eventoId, 1);
+      if (!actualizacionExitosa) {
+        console.error(`❌ Error actualizando contador para evento ${eventoId}`);
+        throw new Error('Error interno al procesar el registro. Intenta nuevamente.');
+      }
+      
       registrosMockDinamicos.push(nuevoRegistro);
       guardarRegistrosEnStorage(registrosMockDinamicos);
       console.log('✅ Registro mock creado:', codigoConfirmacion);
+      
+      // Mostrar estado actualizado
+      const nuevaDisponibilidad = verificarDisponibilidad(eventoId);
+      console.log(`📊 Estado actualizado: ${nuevaDisponibilidad.registrados}/${nuevaDisponibilidad.capacidad} registrados, ${nuevaDisponibilidad.cuposLibres} cupos restantes`);
+      
       return nuevoRegistro;
     }
 
