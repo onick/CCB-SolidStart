@@ -1,6 +1,6 @@
 import { useDrag } from 'solid-gesture';
-import { Component, createSignal, For, onMount, Show } from 'solid-js';
 import { FaSolidHouse } from 'solid-icons/fa';
+import { Component, createSignal, For, onMount, Show } from 'solid-js';
 import { eventosService } from '../lib/supabase/services';
 import '../styles/global.css';
 
@@ -16,6 +16,52 @@ const EventosPublicos: Component = () => {
   const [currentEventIndex, setCurrentEventIndex] = createSignal(0);
   const [swipeOffset, setSwipeOffset] = createSignal(0);
   const [isSwipeMode, setIsSwipeMode] = createSignal(false);
+
+  // Estados para manejar datos del formulario
+  const [registroData, setRegistroData] = createSignal({
+    nombre: '',
+    email: '',
+    telefono: ''
+  });
+
+  // Estados para check-in
+  const [checkinData, setCheckinData] = createSignal({
+    codigo: '',
+    telefono: '',
+    metodo: 'codigo' // 'codigo' o 'telefono'
+  });
+
+  // Estados para Sala Virtual
+  const [tipoRegistroVirtual, setTipoRegistroVirtual] = createSignal('individual'); // 'individual' o 'grupal'
+  
+  // Estados para registro grupal (Sala Virtual)
+  const [registroGrupal, setRegistroGrupal] = createSignal({
+    // Información institucional
+    institucion: '',
+    tipoInstitucion: 'colegio', // colegio, universidad, ong, empresa
+    
+    // Responsable
+    nombreResponsable: '',
+    cargoResponsable: '',
+    emailResponsable: '',
+    telefonoResponsable: '',
+    
+    // Grupo
+    numeroParticipantes: '',
+    rangoEdades: '',
+    nivelEducativo: 'primaria', // primaria, secundaria, universidad, adultos
+    
+    // Visita
+    proposito: 'educativo', // educativo, recreativo, cultural
+    fechaPreferida: '',
+    horaPreferida: '',
+    duracionEstimada: '60', // en minutos
+    
+    // Adicionales
+    requerimientosEspeciales: '',
+    visitasPrevias: false,
+    comentarios: ''
+  });
 
   // Agregar estilos CSS para la aplicación
   const addStyles = () => {
@@ -152,10 +198,101 @@ const EventosPublicos: Component = () => {
     return `CCB-${hash.toUpperCase()}`;
   };
 
+  // Función para verificar si el usuario ya está registrado en un evento
+  const verificarRegistroExistente = (eventoId: string, email: string) => {
+    const registrosGuardados = localStorage.getItem('ccb_registros_usuario');
+    if (!registrosGuardados) return null;
+    
+    try {
+      const registros = JSON.parse(registrosGuardados);
+      return registros.find((registro: any) => 
+        registro.eventoId === eventoId && 
+        registro.email.toLowerCase() === email.toLowerCase()
+      );
+    } catch (error) {
+      console.error('Error al verificar registros existentes:', error);
+      return null;
+    }
+  };
+
+  // Función para guardar registro en localStorage
+  const guardarRegistroLocal = (eventoId: string, email: string, nombre: string, codigo: string, eventoTitulo: string) => {
+    const registrosGuardados = localStorage.getItem('ccb_registros_usuario');
+    let registros = [];
+    
+    if (registrosGuardados) {
+      try {
+        registros = JSON.parse(registrosGuardados);
+      } catch (error) {
+        console.error('Error al parsear registros guardados:', error);
+        registros = [];
+      }
+    }
+    
+    const nuevoRegistro = {
+      eventoId,
+      email: email.toLowerCase(),
+      nombre,
+      codigo,
+      eventoTitulo,
+      fechaRegistro: new Date().toISOString()
+    };
+    
+    registros.push(nuevoRegistro);
+    localStorage.setItem('ccb_registros_usuario', JSON.stringify(registros));
+  };
+
+  // Función para validar formulario
+  const validarFormulario = () => {
+    const data = registroData();
+    return data.nombre.trim() !== '' && data.email.trim() !== '' && data.email.includes('@');
+  };
+
+  // Función para validar check-in
+  const validarCheckin = () => {
+    const data = checkinData();
+    if (data.metodo === 'codigo') {
+      return data.codigo.trim() !== '' && data.codigo.includes('CCB-');
+    } else {
+      return data.telefono.trim() !== '' && data.telefono.length >= 10;
+    }
+  };
+
+  // Función para manejar cambios en inputs
+  const handleInputChange = (field: string, value: string) => {
+    setRegistroData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Función para manejar cambios en check-in
+  const handleCheckinChange = (field: string, value: string) => {
+    setCheckinData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Función para limpiar formulario
+  const limpiarFormulario = () => {
+    setRegistroData({
+      nombre: '',
+      email: '',
+      telefono: ''
+    });
+    setCheckinData({
+      codigo: '',
+      telefono: '',
+      metodo: 'codigo'
+    });
+  };
+
   // Función para abrir modal de registro
   const openRegistroModal = (evento: any) => {
     setSelectedEvento(evento);
     setShowRegistroModal(true);
+    limpiarFormulario(); // Limpiar formulario al abrir
   };
 
   const formatDate = (fecha: string) => {
@@ -181,6 +318,25 @@ const EventosPublicos: Component = () => {
 
   // Función para determinar estado de disponibilidad del evento
   const obtenerEstadoDisponibilidad = (evento: any) => {
+    // PRIMERA VERIFICACIÓN: Si el evento ya finalizó, no permitir registros
+    const now = new Date();
+    const eventDateTime = new Date(`${evento.fecha}T${evento.hora}`);
+    const eventEndTime = new Date(eventDateTime.getTime() + (evento.duracion * 60 * 60 * 1000));
+    
+    // Si el evento ya terminó (más de 30 minutos después del fin)
+    const thirtyMinAfterEnd = new Date(eventEndTime.getTime() + (30 * 60 * 1000));
+    if (now > thirtyMinAfterEnd) {
+      return {
+        disponible: false,
+        estado: 'finalizado',
+        cuposDisponibles: 0,
+        mensaje: 'Evento Finalizado',
+        color: '#6B7280',
+        bgColor: '#F3F4F6',
+        icono: '🏁'
+      };
+    }
+    
     const cuposDisponibles = evento.cupos_disponibles ?? (evento.capacidad - evento.registrados);
     const capacidad = evento.capacidad_maxima ?? evento.capacidad ?? 200;
     const registrados = evento.registrados ?? 0;
@@ -272,6 +428,115 @@ const EventosPublicos: Component = () => {
     threshold: 10 // Threshold para iniciar drag
   });
 
+  // Función para determinar el tipo de modal (registro o check-in)
+  const getTipoModal = (evento: any) => {
+    if (isSalaVirtual(evento)) {
+      return 'sala_virtual';
+    }
+    
+    // Si el evento está activo Y tiene registrados, mostrar check-in
+    // Si el evento está activo pero SIN registrados, permitir registro directo
+    if (isEventoActivo(evento)) {
+      const tieneRegistrados = evento.registrados > 0;
+      return tieneRegistrados ? 'checkin' : 'registro';
+    }
+    
+    // Si no está activo, siempre mostrar registro
+    return 'registro';
+  };
+
+  // Función para detectar si es evento de Sala Virtual
+  const isSalaVirtual = (evento: any) => {
+    return evento.tipo === 'sala_virtual' || 
+           evento.titulo.toLowerCase().includes('sala virtual') ||
+           evento.titulo.toLowerCase().includes('virtual');
+  };
+
+  // Función para manejar cambios en registro grupal
+  const handleRegistroGrupalChange = (field: string, value: any) => {
+    setRegistroGrupal(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Función para validar registro grupal
+  const validarRegistroGrupal = () => {
+    const data = registroGrupal();
+    return data.institucion.trim() !== '' &&
+           data.nombreResponsable.trim() !== '' &&
+           data.emailResponsable.trim() !== '' &&
+           data.emailResponsable.includes('@') &&
+           data.telefonoResponsable.trim() !== '' &&
+           data.numeroParticipantes !== '' &&
+           parseInt(data.numeroParticipantes) > 1 &&
+           data.fechaPreferida !== '';
+  };
+
+  // Función para limpiar formularios virtuales
+  const limpiarFormulariosVirtual = () => {
+    setTipoRegistroVirtual('individual');
+    setRegistroGrupal({
+      institucion: '',
+      tipoInstitucion: 'colegio',
+      nombreResponsable: '',
+      cargoResponsable: '',
+      emailResponsable: '',
+      telefonoResponsable: '',
+      numeroParticipantes: '',
+      rangoEdades: '',
+      nivelEducativo: 'primaria',
+      proposito: 'educativo',
+      fechaPreferida: '',
+      horaPreferida: '',
+      duracionEstimada: '60',
+      requerimientosEspeciales: '',
+      visitasPrevias: false,
+      comentarios: ''
+    });
+  };
+
+  // Función para mostrar historial de registros del usuario
+  const mostrarHistorialRegistros = () => {
+    const registrosGuardados = localStorage.getItem('ccb_registros_usuario');
+    
+    if (!registrosGuardados) {
+      alert('📋 No tienes registros guardados.\n\n💡 Cuando te registres a un evento, aparecerá aquí tu historial.');
+      return;
+    }
+    
+    try {
+      const registros = JSON.parse(registrosGuardados);
+      
+      if (registros.length === 0) {
+        alert('📋 No tienes registros guardados.\n\n💡 Cuando te registres a un evento, aparecerá aquí tu historial.');
+        return;
+      }
+      
+      let mensaje = `📋 Tu Historial de Registros (${registros.length} eventos)\n\n`;
+      
+      registros.forEach((registro: any, index: number) => {
+        const fechaRegistro = new Date(registro.fechaRegistro).toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        });
+        
+        mensaje += `${index + 1}. 🎪 ${registro.eventoTitulo}\n`;
+        mensaje += `   👤 ${registro.nombre}\n`;
+        mensaje += `   🎫 ${registro.codigo}\n`;
+        mensaje += `   📅 ${fechaRegistro}\n\n`;
+      });
+      
+      mensaje += '💡 Guarda tus códigos para hacer check-in en los eventos.';
+      
+      alert(mensaje);
+    } catch (error) {
+      console.error('Error al mostrar historial:', error);
+      alert('❌ Error al cargar tu historial de registros.');
+    }
+  };
+
   return (
     <div style="min-height: 100vh; background: #F8FAFC; margin: 0; padding: 0;">
       {/* Header Azul pegado al borde superior */}
@@ -306,6 +571,19 @@ const EventosPublicos: Component = () => {
             title="Ir a la página principal"
           >
             <FaSolidHouse size={20} color="white" />
+          </button>
+          <button 
+            onclick={mostrarHistorialRegistros}
+            style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;"
+            onMouseEnter={(e) => {
+              (e.target as HTMLButtonElement).style.background = 'rgba(255,255,255,0.3)';
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLButtonElement).style.background = 'rgba(255,255,255,0.2)';
+            }}
+            title="Ver mi historial de registros"
+          >
+            📋 Mis Registros
           </button>
           <button 
             onclick={recargarEventos}
@@ -643,7 +921,7 @@ const EventosPublicos: Component = () => {
                                     <span>{registrados} registrados</span>
                                     <span>{capacidad} capacidad total</span>
                                   </div>
-                                  <div style="background: #F3F4F6; height: 8px; border-radius: 4px; overflow: hidden;">
+                                  <div style="background: #F3F4F6; height: 6px; border-radius: 3px; overflow: hidden;">
                                     <div style={`
                                       background: ${
                                         estadoDisponibilidad.estado === 'agotado' 
@@ -654,7 +932,7 @@ const EventosPublicos: Component = () => {
                                       }; 
                                       height: 100%; 
                                       width: ${Math.min(porcentajeOcupacion, 100)}%; 
-                                      border-radius: 4px;
+                                      border-radius: 3px;
                                       transition: all 0.3s;
                                     `}></div>
                                   </div>
@@ -833,12 +1111,42 @@ const EventosPublicos: Component = () => {
 
                       {/* Disponibilidad */}
                       <div style="margin-bottom: 1rem;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6B7280; margin-bottom: 0.3rem;">
-                          <span>{evento.cupos_disponibles || 150} cupos disponibles de {evento.capacidad_maxima || 200}</span>
-                        </div>
-                        <div style="background: #F3F4F6; height: 6px; border-radius: 3px; overflow: hidden;">
-                          <div style={`background: linear-gradient(90deg, #F59E0B, #F97316); height: 100%; width: ${((evento.cupos_disponibles || 150) / (evento.capacidad_maxima || 200)) * 100}%; border-radius: 3px;`}></div>
-                        </div>
+                        {(() => {
+                          const estadoDisponibilidad = obtenerEstadoDisponibilidad(evento);
+                          const capacidad = evento.capacidad_maxima ?? evento.capacidad ?? 200;
+                          const registrados = evento.registrados ?? 0;
+                          const porcentajeOcupacion = (registrados / capacidad) * 100;
+                          
+                          return (
+                            <div>
+                              {/* Estado visual */}
+                              <div style={`background: ${estadoDisponibilidad.bgColor}; color: ${estadoDisponibilidad.color}; padding: 0.5rem 1rem; border-radius: 8px; text-align: center; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;`}>
+                                {estadoDisponibilidad.icono} {estadoDisponibilidad.mensaje}
+                              </div>
+                              
+                              {/* Barra de progreso */}
+                              <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6B7280; margin-bottom: 0.3rem;">
+                                <span>{registrados} registrados</span>
+                                <span>{capacidad} capacidad total</span>
+                              </div>
+                              <div style="background: #F3F4F6; height: 6px; border-radius: 3px; overflow: hidden;">
+                                <div style={`
+                                  background: ${
+                                    estadoDisponibilidad.estado === 'agotado' 
+                                      ? 'linear-gradient(90deg, #EF4444, #DC2626)' 
+                                      : estadoDisponibilidad.estado === 'ultimos_cupos'
+                                      ? 'linear-gradient(90deg, #F59E0B, #F97316)'
+                                      : 'linear-gradient(90deg, #059669, #047857)'
+                                  }; 
+                                  height: 100%; 
+                                  width: ${Math.min(porcentajeOcupacion, 100)}%; 
+                                  border-radius: 3px;
+                                  transition: all 0.3s;
+                                `}></div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -857,7 +1165,11 @@ const EventosPublicos: Component = () => {
             
             {/* Cerrar Modal */}
             <button 
-              onclick={() => setShowRegistroModal(false)}
+              onclick={() => {
+                setShowRegistroModal(false);
+                limpiarFormulario();
+                limpiarFormulariosVirtual();
+              }}
               style="position: absolute; top: 1rem; right: 1rem; background: #F3F4F6; color: #6B7280; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
               onMouseEnter={(e) => {
                 (e.target as HTMLButtonElement).style.background = '#E5E7EB';
@@ -871,138 +1183,618 @@ const EventosPublicos: Component = () => {
 
             {/* Header del Modal */}
             <div style="text-align: center; margin-bottom: 2rem;">
-              <div style="font-size: 2rem; margin-bottom: 1rem;">🎫</div>
-              <h2 style="color: #111827; font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">
-                Registro al Evento
-              </h2>
               <Show when={selectedEvento()}>
-                <h3 style="color: #0EA5E9; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
-                  {selectedEvento()?.titulo}
-                </h3>
-                <p style="color: #6B7280; font-size: 0.9rem;">
-                  {selectedEvento() && isEventoActivo(selectedEvento()) 
-                    ? '🔴 Este evento está activo - Tu código estará listo para check-in'
-                    : '📧 Recibirás tu código por email'
-                  }
-                </p>
+                {(() => {
+                  const tipoModal = getTipoModal(selectedEvento());
+                  const isCheckin = tipoModal === 'checkin';
+                  const isSalaVirtualModal = tipoModal === 'sala_virtual';
+                  
+                  return (
+                    <>
+                      <div style="font-size: 2rem; margin-bottom: 1rem;">
+                        {isSalaVirtualModal ? '🌐' : isCheckin ? '✅' : '🎫'}
+                      </div>
+                      <h2 style="color: #111827; font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">
+                        {isSalaVirtualModal 
+                          ? 'Registro Sala Virtual' 
+                          : isCheckin 
+                            ? 'Check-in al Evento' 
+                            : 'Registro al Evento'
+                        }
+                      </h2>
+                      <h3 style="color: #0EA5E9; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
+                        {selectedEvento()?.titulo}
+                      </h3>
+                      <p style="color: #6B7280; font-size: 0.9rem;">
+                        {isSalaVirtualModal
+                          ? '🏛️ Acceso permanente al recorrido virtual del Centro Cultural Banreservas'
+                          : isCheckin 
+                            ? '🔴 El evento está disponible para check-in. Usa tu código o teléfono registrado.'
+                            : '📧 Recibirás tu código por email para el día del evento'
+                        }
+                      </p>
+                    </>
+                  );
+                })()}
               </Show>
             </div>
 
             {/* Formulario */}
             <form style="display: flex; flex-direction: column; gap: 1rem;">
-              
-              {/* Nombre Completo */}
-              <div>
-                <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
-                  Nombre Completo *
-                </label>
-                <input 
-                  type="text" 
-                  placeholder="Ingresa tu nombre completo"
-                  required
-                  style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
-                  onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
-                  onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
-                />
-              </div>
+              <Show when={selectedEvento()}>
+                {(() => {
+                  const tipoModal = getTipoModal(selectedEvento());
+                  const isCheckin = tipoModal === 'checkin';
+                  const isSalaVirtualModal = tipoModal === 'sala_virtual';
+                  
+                  if (isSalaVirtualModal) {
+                    // FORMULARIO DE SALA VIRTUAL
+                    return (
+                      <>
+                        {/* Selector de Tipo de Registro */}
+                        <div style="margin-bottom: 1.5rem;">
+                          <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                            Tipo de Registro
+                          </label>
+                          <div style="display: flex; gap: 1rem;">
+                            <button
+                              type="button"
+                              onclick={() => setTipoRegistroVirtual('individual')}
+                              style={`flex: 1; padding: 1rem; border: 2px solid ${tipoRegistroVirtual() === 'individual' ? '#0EA5E9' : '#D1D5DB'}; background: ${tipoRegistroVirtual() === 'individual' ? '#EFF6FF' : 'white'}; color: ${tipoRegistroVirtual() === 'individual' ? '#0EA5E9' : '#6B7280'}; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center;`}
+                            >
+                              <div>👤 Individual</div>
+                              <div style="font-size: 0.8rem; font-weight: 400; margin-top: 0.25rem;">Para personas individuales</div>
+                            </button>
+                            <button
+                              type="button"
+                              onclick={() => setTipoRegistroVirtual('grupo')}
+                              style={`flex: 1; padding: 1rem; border: 2px solid ${tipoRegistroVirtual() === 'grupo' ? '#0EA5E9' : '#D1D5DB'}; background: ${tipoRegistroVirtual() === 'grupo' ? '#EFF6FF' : 'white'}; color: ${tipoRegistroVirtual() === 'grupo' ? '#0EA5E9' : '#6B7280'}; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center;`}
+                            >
+                              <div>👥 Grupo</div>
+                              <div style="font-size: 0.8rem; font-weight: 400; margin-top: 0.25rem;">Para colegios e instituciones</div>
+                            </button>
+                          </div>
+                        </div>
 
-              {/* Email */}
-              <div>
-                <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
-                  Correo Electrónico *
-                </label>
-                <input 
-                  type="email" 
-                  placeholder="tu@email.com"
-                  required
-                  style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
-                  onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
-                  onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
-                />
-              </div>
+                        {/* Formulario Individual */}
+                        <Show when={tipoRegistroVirtual() === 'individual'}>
+                          <div style="display: flex; flex-direction: column; gap: 1rem;">
+                            <div>
+                              <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                                Nombre Completo *
+                              </label>
+                              <input 
+                                type="text" 
+                                placeholder="Ingresa tu nombre completo"
+                                required
+                                value={registroData().nombre}
+                                onInput={(e) => handleInputChange('nombre', e.currentTarget.value)}
+                                style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                                onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                                onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                              />
+                            </div>
+                            <div>
+                              <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                                Correo Electrónico *
+                              </label>
+                              <input 
+                                type="email" 
+                                placeholder="tu@email.com"
+                                required
+                                value={registroData().email}
+                                onInput={(e) => handleInputChange('email', e.currentTarget.value)}
+                                style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                                onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                                onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                              />
+                              <p style="font-size: 0.75rem; color: #6B7280; margin: 0.25rem 0 0 0;">
+                                🌐 Recibirás el enlace de acceso aquí
+                              </p>
+                            </div>
+                          </div>
+                        </Show>
 
-              {/* Teléfono */}
-              <div>
-                <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
-                  Teléfono (Opcional)
-                </label>
-                <input 
-                  type="tel" 
-                  placeholder="809-555-0123"
-                  style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
-                  onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
-                  onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
-                />
-              </div>
+                        {/* Formulario Grupal */}
+                        <Show when={tipoRegistroVirtual() === 'grupo'}>
+                          <div style="display: flex; flex-direction: column; gap: 1rem; max-height: 400px; overflow-y: auto; padding-right: 0.5rem;">
+                            {/* Información de la Institución */}
+                            <div style="background: #F9FAFB; padding: 1rem; border-radius: 8px; border: 1px solid #E5E7EB;">
+                              <h4 style="color: #374151; font-size: 0.9rem; font-weight: 600; margin: 0 0 1rem 0;">📚 Información de la Institución</h4>
+                              
+                              <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <div>
+                                  <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                    Nombre de la Institución *
+                                  </label>
+                                  <input 
+                                    type="text" 
+                                    placeholder="Ej: Colegio San Patricio"
+                                    required
+                                    value={registroGrupal().institucion}
+                                    onInput={(e) => handleRegistroGrupalChange('institucion', e.currentTarget.value)}
+                                    style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                    Tipo de Institución *
+                                  </label>
+                                  <select 
+                                    value={registroGrupal().tipoInstitucion}
+                                    onChange={(e) => handleRegistroGrupalChange('tipoInstitucion', e.currentTarget.value)}
+                                    style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.9rem; outline: none; box-sizing: border-box; background: white;"
+                                  >
+                                    <option value="colegio">🏫 Colegio</option>
+                                    <option value="universidad">🎓 Universidad</option>
+                                    <option value="instituto">📖 Instituto</option>
+                                    <option value="organizacion">🏢 Organización</option>
+                                    <option value="otro">📋 Otro</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Información del Responsable */}
+                            <div style="background: #F0F9FF; padding: 1rem; border-radius: 8px; border: 1px solid #BAE6FD;">
+                              <h4 style="color: #374151; font-size: 0.9rem; font-weight: 600; margin: 0 0 1rem 0;">👨‍🏫 Persona Responsable</h4>
+                              
+                              <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <div>
+                                  <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                    Nombre del Responsable *
+                                  </label>
+                                  <input 
+                                    type="text" 
+                                    placeholder="Nombre del profesor o coordinador"
+                                    required
+                                    value={registroGrupal().nombreResponsable}
+                                    onInput={(e) => handleRegistroGrupalChange('nombreResponsable', e.currentTarget.value)}
+                                    style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                    Correo Electrónico *
+                                  </label>
+                                  <input 
+                                    type="email" 
+                                    placeholder="responsable@institucion.edu"
+                                    required
+                                    value={registroGrupal().emailResponsable}
+                                    onInput={(e) => handleRegistroGrupalChange('emailResponsable', e.currentTarget.value)}
+                                    style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                    Teléfono *
+                                  </label>
+                                  <input 
+                                    type="tel" 
+                                    placeholder="809-555-0123"
+                                    required
+                                    value={registroGrupal().telefonoResponsable}
+                                    onInput={(e) => handleRegistroGrupalChange('telefonoResponsable', e.currentTarget.value)}
+                                    style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Información del Grupo */}
+                            <div style="background: #F0FDF4; padding: 1rem; border-radius: 8px; border: 1px solid #BBF7D0;">
+                              <h4 style="color: #374151; font-size: 0.9rem; font-weight: 600; margin: 0 0 1rem 0;">👥 Información del Grupo</h4>
+                              
+                              <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <div style="display: flex; gap: 0.75rem;">
+                                  <div style="flex: 1;">
+                                    <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                      Número de Participantes *
+                                    </label>
+                                    <input 
+                                      type="number" 
+                                      placeholder="25"
+                                      min="2"
+                                      max="100"
+                                      required
+                                      value={registroGrupal().numeroParticipantes}
+                                      onInput={(e) => handleRegistroGrupalChange('numeroParticipantes', e.currentTarget.value)}
+                                      style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                                    />
+                                  </div>
+                                  
+                                  <div style="flex: 1;">
+                                    <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                      Rango de Edades
+                                    </label>
+                                    <input 
+                                      type="text" 
+                                      placeholder="Ej: 8-12 años"
+                                      value={registroGrupal().rangoEdades}
+                                      onInput={(e) => handleRegistroGrupalChange('rangoEdades', e.currentTarget.value)}
+                                      style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                                    />
+                                  </div>
+                                </div>
+                                
+                                <div>
+                                  <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                    Fecha Preferida *
+                                  </label>
+                                  <input 
+                                    type="date" 
+                                    required
+                                    min={new Date().toISOString().split('T')[0]}
+                                    value={registroGrupal().fechaPreferida}
+                                    onInput={(e) => handleRegistroGrupalChange('fechaPreferida', e.currentTarget.value)}
+                                    style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                    Comentarios Adicionales
+                                  </label>
+                                  <textarea 
+                                    placeholder="Información adicional sobre el grupo o requisitos especiales..."
+                                    value={registroGrupal().comentarios}
+                                    onInput={(e) => handleRegistroGrupalChange('comentarios', e.currentTarget.value)}
+                                    style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; box-sizing: border-box; resize: vertical; min-height: 80px;"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </Show>
+                      </>
+                    );
+                  } else if (isCheckin) {
+                    // FORMULARIO DE CHECK-IN
+                    return (
+                      <>
+                        {/* Método de Check-in */}
+                        <div style="margin-bottom: 1rem;">
+                          <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                            Método de Check-in
+                          </label>
+                          <div style="display: flex; gap: 1rem;">
+                            <button
+                              type="button"
+                              onclick={() => handleCheckinChange('metodo', 'codigo')}
+                              style={`flex: 1; padding: 0.75rem; border: 2px solid ${checkinData().metodo === 'codigo' ? '#0EA5E9' : '#D1D5DB'}; background: ${checkinData().metodo === 'codigo' ? '#EFF6FF' : 'white'}; color: ${checkinData().metodo === 'codigo' ? '#0EA5E9' : '#6B7280'}; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;`}
+                            >
+                              🎫 Código
+                            </button>
+                            <button
+                              type="button"
+                              onclick={() => handleCheckinChange('metodo', 'telefono')}
+                              style={`flex: 1; padding: 0.75rem; border: 2px solid ${checkinData().metodo === 'telefono' ? '#0EA5E9' : '#D1D5DB'}; background: ${checkinData().metodo === 'telefono' ? '#EFF6FF' : 'white'}; color: ${checkinData().metodo === 'telefono' ? '#0EA5E9' : '#6B7280'}; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;`}
+                            >
+                              📱 Teléfono
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Campo dinámico según método */}
+                        <Show when={checkinData().metodo === 'codigo'}>
+                          <div>
+                            <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                              Código de Evento *
+                            </label>
+                            <input 
+                              type="text" 
+                              placeholder="CCB-XXXXXXXX"
+                              required
+                              value={checkinData().codigo}
+                              onInput={(e) => handleCheckinChange('codigo', e.currentTarget.value.toUpperCase())}
+                              style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box; font-family: monospace;"
+                              onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                              onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                            />
+                            <p style="font-size: 0.75rem; color: #6B7280; margin: 0.25rem 0 0 0;">
+                              💡 Introduce el código que recibiste por email
+                            </p>
+                          </div>
+                        </Show>
+
+                        <Show when={checkinData().metodo === 'telefono'}>
+                          <div>
+                            <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                              Teléfono Registrado *
+                            </label>
+                            <input 
+                              type="tel" 
+                              placeholder="809-555-0123"
+                              required
+                              value={checkinData().telefono}
+                              onInput={(e) => handleCheckinChange('telefono', e.currentTarget.value)}
+                              style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                              onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                              onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                            />
+                            <p style="font-size: 0.75rem; color: #6B7280; margin: 0.25rem 0 0 0;">
+                              📱 Usa el teléfono con el que te registraste
+                            </p>
+                          </div>
+                        </Show>
+                      </>
+                    );
+                  } else {
+                    // FORMULARIO DE REGISTRO NORMAL
+                    return (
+                      <>
+                        {/* Nombre Completo */}
+                        <div>
+                          <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                            Nombre Completo *
+                          </label>
+                          <input 
+                            type="text" 
+                            placeholder="Ingresa tu nombre completo"
+                            required
+                            value={registroData().nombre}
+                            onInput={(e) => handleInputChange('nombre', e.currentTarget.value)}
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                            onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                            onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                          />
+                        </div>
+
+                        {/* Email */}
+                        <div>
+                          <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                            Correo Electrónico *
+                          </label>
+                          <input 
+                            type="email" 
+                            placeholder="tu@email.com"
+                            required
+                            value={registroData().email}
+                            onInput={(e) => handleInputChange('email', e.currentTarget.value)}
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                            onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                            onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                          />
+                          <p style="font-size: 0.75rem; color: #6B7280; margin: 0.25rem 0 0 0;">
+                            📧 Recibirás tu código de evento aquí
+                          </p>
+                        </div>
+
+                        {/* Teléfono */}
+                        <div>
+                          <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                            Teléfono (Recomendado)
+                          </label>
+                          <input 
+                            type="tel" 
+                            placeholder="809-555-0123"
+                            value={registroData().telefono}
+                            onInput={(e) => handleInputChange('telefono', e.currentTarget.value)}
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                            onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                            onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                          />
+                          <p style="font-size: 0.75rem; color: #6B7280; margin: 0.25rem 0 0 0;">
+                            📱 Te permitirá hacer check-in el día del evento
+                          </p>
+                        </div>
+                      </>
+                    );
+                  }
+                })()}
+              </Show>
 
               {/* Botones de Acción */}
-              <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+              <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
                 <button 
                   type="button"
-                  onclick={() => setShowRegistroModal(false)}
-                  style="flex: 1; padding: 0.75rem; border: 1px solid #D1D5DB; background: white; color: #6B7280; border-radius: 8px; font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: all 0.2s;"
+                  onclick={() => {
+                    setShowRegistroModal(false);
+                    limpiarFormulario();
+                    limpiarFormulariosVirtual();
+                  }}
+                  style="flex: 1; padding: 0.75rem; background: #F3F4F6; color: #374151; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s;"
+                  onMouseOver={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#E5E7EB'}
+                  onMouseOut={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#F3F4F6'}
                 >
                   Cancelar
                 </button>
-                {(() => {
-                  const estadoDisponibilidad = selectedEvento() ? obtenerEstadoDisponibilidad(selectedEvento()) : { disponible: true, estado: 'disponible', mensaje: 'Disponible' };
-                  const estaDisponible = estadoDisponibilidad.disponible;
-                  
-                  return (
-                    <button 
-                      type="submit"
-                      disabled={!estaDisponible}
-                      onclick={(e) => {
-                        e.preventDefault();
-                        
-                        if (!estaDisponible) {
-                          alert('❌ Lo sentimos, este evento ha alcanzado su capacidad máxima y no tiene cupos disponibles.');
-                          return;
-                        }
-                        
-                        console.log('Procesando registro...', {
-                          evento: selectedEvento(),
-                          disponibilidad: estadoDisponibilidad,
-                          esActivo: selectedEvento() && isEventoActivo(selectedEvento())
-                        });
-                        
-                        // Simular registro exitoso
-                        alert(`✅ ¡Registro procesado exitosamente! ${estadoDisponibilidad.cuposDisponibles - 1} cupos restantes.`);
-                        setShowRegistroModal(false);
-                        
-                        // Recargar eventos para actualizar contadores
-                        recargarEventos();
-                      }}
-                      style={`
-                        flex: 2; 
-                        padding: 0.75rem; 
-                        border: none; 
-                        background: ${estaDisponible ? '#0EA5E9' : '#9CA3AF'}; 
-                        color: white; 
-                        border-radius: 8px; 
-                        font-size: 0.9rem; 
-                        font-weight: 600; 
-                        cursor: ${estaDisponible ? 'pointer' : 'not-allowed'}; 
-                        transition: all 0.2s;
-                        opacity: ${estaDisponible ? '1' : '0.6'};
-                      `}
-                      onMouseEnter={(e) => {
-                        if (estaDisponible) {
-                          (e.target as HTMLButtonElement).style.background = '#0284C7';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (estaDisponible) {
-                          (e.target as HTMLButtonElement).style.background = '#0EA5E9';
-                        } else {
-                          (e.target as HTMLButtonElement).style.background = '#9CA3AF';
-                        }
-                      }}
-                    >
-                      {estaDisponible ? 'Registrarse' : 'Evento Agotado'}
-                    </button>
-                  );
-                })()}
+                
+                <Show when={selectedEvento()}>
+                  {(() => {
+                    const evento = selectedEvento();
+                    const tipoModal = getTipoModal(evento);
+                    const isCheckin = tipoModal === 'checkin';
+                    const isSalaVirtualModal = tipoModal === 'sala_virtual';
+                    
+                    if (isSalaVirtualModal) {
+                      // BOTÓN DE SALA VIRTUAL
+                      const esRegistroIndividual = tipoRegistroVirtual() === 'individual';
+                      const formularioIndividualValido = registroData().nombre.trim() !== '' && 
+                                                         registroData().email.trim() !== '' && 
+                                                         registroData().email.includes('@');
+                      const formularioGrupalValido = validarRegistroGrupal();
+                      const isValid = esRegistroIndividual ? formularioIndividualValido : formularioGrupalValido;
+                      
+                      return (
+                        <button 
+                          type="button"
+                          onclick={() => {
+                            if (esRegistroIndividual) {
+                              if (!formularioIndividualValido) {
+                                const campos = [];
+                                if (!registroData().nombre.trim()) campos.push('• Nombre completo');
+                                if (!registroData().email.trim() || !registroData().email.includes('@')) campos.push('• Email válido');
+                                
+                                alert(`❌ Por favor, completa los campos requeridos:\n\n${campos.join('\n')}`);
+                                return;
+                              }
+                              
+                              alert(`🌐 ¡Registro a Sala Virtual exitoso!\n\nNombre: ${registroData().nombre}\nEmail: ${registroData().email}\n\n📧 Recibirás el enlace de acceso por email.\n🏛️ ¡Disfruta del recorrido virtual del Centro Cultural Banreservas!`);
+                            } else {
+                              if (!formularioGrupalValido) {
+                                alert('❌ Por favor, completa todos los campos requeridos para el registro grupal.');
+                                return;
+                              }
+                              
+                              const data = registroGrupal();
+                              alert(`🏫 ¡Registro grupal a Sala Virtual exitoso!\n\nInstitución: ${data.institucion}\nResponsable: ${data.nombreResponsable}\nParticipantes: ${data.numeroParticipantes}\nFecha Preferida: ${data.fechaPreferida}\n\n📧 Nos pondremos en contacto contigo para coordinar la visita virtual.\n🌐 ¡Esperamos que disfruten del recorrido!`);
+                            }
+                            
+                            setShowRegistroModal(false);
+                            limpiarFormulario();
+                            limpiarFormulariosVirtual();
+                          }}
+                          style={`flex: 1; padding: 0.75rem; background: ${isValid ? '#10B981' : '#EF4444'}; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: ${isValid ? 'pointer' : 'not-allowed'}; transition: background-color 0.2s; opacity: ${isValid ? '1' : '0.7'};`}
+                          disabled={!isValid}
+                          onMouseOver={(e) => {
+                            if (isValid) {
+                              (e.target as HTMLButtonElement).style.backgroundColor = '#059669';
+                            }
+                          }}
+                          onMouseOut={(e) => {
+                            if (isValid) {
+                              (e.target as HTMLButtonElement).style.backgroundColor = '#10B981';
+                            }
+                          }}
+                        >
+                          {isValid 
+                            ? (esRegistroIndividual ? '🌐 Acceder a Sala Virtual' : '🏫 Solicitar Visita Grupal')
+                            : 'Completa los campos requeridos'
+                          }
+                        </button>
+                      );
+                    } else if (isCheckin) {
+                      // BOTÓN DE CHECK-IN
+                      const isValid = validarCheckin();
+                      return (
+                        <button 
+                          type="button"
+                          onclick={() => {
+                            if (validarCheckin()) {
+                              const metodo = checkinData().metodo;
+                              const valor = metodo === 'codigo' ? checkinData().codigo : checkinData().telefono;
+                              alert(`✅ Check-in realizado exitosamente!\n\nMétodo: ${metodo === 'codigo' ? 'Código' : 'Teléfono'}\nValor: ${valor}\n\n¡Disfruta el evento! 🎉`);
+                              setShowRegistroModal(false);
+                              limpiarFormulario();
+                            } else {
+                              const metodo = checkinData().metodo;
+                              const campo = metodo === 'codigo' ? 'código' : 'teléfono';
+                              alert(`❌ Por favor, introduce tu ${campo} para hacer check-in.`);
+                            }
+                          }}
+                          style={`flex: 1; padding: 0.75rem; background: ${isValid ? '#10B981' : '#EF4444'}; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: ${isValid ? 'pointer' : 'not-allowed'}; transition: background-color 0.2s; opacity: ${isValid ? '1' : '0.7'};`}
+                          disabled={!isValid}
+                          onMouseOver={(e) => {
+                            if (isValid) {
+                              (e.target as HTMLButtonElement).style.backgroundColor = '#059669';
+                            }
+                          }}
+                          onMouseOut={(e) => {
+                            if (isValid) {
+                              (e.target as HTMLButtonElement).style.backgroundColor = '#10B981';
+                            }
+                          }}
+                        >
+                          {isValid ? '✅ Hacer Check-in' : `Introduce tu ${checkinData().metodo === 'codigo' ? 'código' : 'teléfono'}`}
+                        </button>
+                      );
+                    } else {
+                      // BOTÓN DE REGISTRO
+                      const estadoDisponibilidad = obtenerEstadoDisponibilidad(evento);
+                      const puedeRegistrarse = estadoDisponibilidad.cuposDisponibles > 0 && estadoDisponibilidad.estado !== 'finalizado';
+                      const formularioValido = validarFormulario();
+                      const isValid = puedeRegistrarse && formularioValido;
+                      
+                      return (
+                        <button 
+                          type="button"
+                          onclick={() => {
+                            if (!puedeRegistrarse) {
+                              if (estadoDisponibilidad.estado === 'finalizado') {
+                                alert('❌ Este evento ya ha finalizado y no acepta más registros.');
+                              } else {
+                                alert('❌ Este evento ya no tiene cupos disponibles.');
+                              }
+                              return;
+                            }
+                            
+                            if (!formularioValido) {
+                              const campos = [];
+                              if (!registroData().nombre.trim()) campos.push('• Nombre completo');
+                              if (!registroData().email.trim() || !registroData().email.includes('@')) campos.push('• Email válido');
+                              
+                              alert(`❌ Por favor, completa los campos requeridos:\n\n${campos.join('\n')}`);
+                              return;
+                            }
+                            
+                            // VERIFICAR SI YA ESTÁ REGISTRADO
+                            const registroExistente = verificarRegistroExistente(evento.id, registroData().email);
+                            
+                            if (registroExistente) {
+                              const fechaRegistro = new Date(registroExistente.fechaRegistro).toLocaleDateString('es-ES', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              });
+                              
+                              if (isEventoActivo(evento)) {
+                                // Para eventos en curso: check-in automático
+                                alert(`✅ ¡Ya estás registrado y tu check-in se ha realizado automáticamente!\n\n👤 Nombre: ${registroExistente.nombre}\n📧 Email: ${registroExistente.email}\n🎫 Código: ${registroExistente.codigo}\n📅 Registrado: ${fechaRegistro}\n\n🎪 ¡El evento está en curso, disfruta la experiencia!`);
+                              } else {
+                                // Para eventos futuros: mostrar info y recordar check-in
+                                alert(`ℹ️ Ya estás registrado en este evento!\n\n👤 Nombre: ${registroExistente.nombre}\n📧 Email: ${registroExistente.email}\n🎫 Código: ${registroExistente.codigo}\n📅 Registrado: ${fechaRegistro}\n\n💡 Guarda tu código para hacer check-in el día del evento.\n⏰ Usa tu código cuando llegue la fecha del evento.`);
+                              }
+                              
+                              setShowRegistroModal(false);
+                              limpiarFormulario();
+                              return;
+                            }
+                            
+                            // PROCEDER CON NUEVO REGISTRO
+                            const codigo = generateEventCode(evento.id, registroData().email);
+                            
+                            // Guardar registro en localStorage
+                            guardarRegistroLocal(evento.id, registroData().email, registroData().nombre, codigo, evento.titulo);
+                            
+                            // Si el evento está en curso y es el primer registro, hacer check-in automático
+                            if (isEventoActivo(evento) && evento.registrados === 0) {
+                              alert(`🎉 ¡Registro e ingreso exitoso!\n\nNombre: ${registroData().nombre}\nEmail: ${registroData().email}\nCódigo: ${codigo}\n\n✅ Como el evento ya está en curso, tu check-in se ha realizado automáticamente.\n🎪 ¡Disfruta el evento!`);
+                            } else {
+                              alert(`🎉 ¡Registro exitoso!\n\nNombre: ${registroData().nombre}\nEmail: ${registroData().email}\nCódigo: ${codigo}\n\n📧 Recibirás un email con toda la información del evento.\n💡 Guarda tu código para hacer check-in el día del evento.`);
+                            }
+                            
+                            setShowRegistroModal(false);
+                            limpiarFormulario();
+                          }}
+                          style={`flex: 1; padding: 0.75rem; background: ${!puedeRegistrarse ? '#1F2937' : (formularioValido ? '#10B981' : '#EF4444')}; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: ${isValid ? 'pointer' : 'not-allowed'}; transition: background-color 0.2s; opacity: ${isValid ? '1' : '0.7'};`}
+                          disabled={!isValid}
+                          onMouseOver={(e) => {
+                            if (isValid) {
+                              (e.target as HTMLButtonElement).style.backgroundColor = '#059669';
+                            }
+                          }}
+                          onMouseOut={(e) => {
+                            if (isValid) {
+                              (e.target as HTMLButtonElement).style.backgroundColor = '#10B981';
+                            }
+                          }}
+                        >
+                          {!puedeRegistrarse ? 
+                            (estadoDisponibilidad.estado === 'finalizado' ? '⏰ Evento Finalizado' : '🔒 Evento Agotado') :
+                            (formularioValido ? '🎫 Registrarse' : 'Completa los campos')
+                          }
+                        </button>
+                      );
+                    }
+                  })()}
+                </Show>
               </div>
             </form>
           </div>
