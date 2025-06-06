@@ -25,6 +25,7 @@
 
 .logo-container {
   margin-bottom: 30px;
+  position: relative;
 }
 
 .logo-placeholder {
@@ -49,7 +50,96 @@
   width: 120px;
   height: auto;
   filter: drop-shadow(0 8px 25px rgba(0, 189, 242, 0.3));
-}.welcome-content h1 {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: logoFloat 4s ease-in-out infinite;
+  cursor: pointer;
+  border-radius: 50%;
+  position: relative;
+}
+
+/* Animación principal de flotación */
+@keyframes logoFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+    filter: drop-shadow(0 8px 25px rgba(0, 189, 242, 0.3)) brightness(1);
+  }
+  25% {
+    transform: translateY(-8px) rotate(1deg);
+    filter: drop-shadow(0 12px 30px rgba(0, 189, 242, 0.4)) brightness(1.05);
+  }
+  50% {
+    transform: translateY(-12px) rotate(0deg);
+    filter: drop-shadow(0 16px 35px rgba(0, 189, 242, 0.5)) brightness(1.1);
+  }
+  75% {
+    transform: translateY(-8px) rotate(-1deg);
+    filter: drop-shadow(0 12px 30px rgba(0, 189, 242, 0.4)) brightness(1.05);
+  }
+}
+
+/* Efecto de hover elegante */
+.logo-real:hover {
+  transform: translateY(-15px) scale(1.1);
+  filter: drop-shadow(0 20px 40px rgba(0, 189, 242, 0.6)) brightness(1.2);
+  animation-play-state: paused;
+}
+
+/* Efecto de brillo sutil */
+.logo-real::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, 
+    transparent 30%, 
+    rgba(255, 255, 255, 0.3) 50%, 
+    transparent 70%);
+  border-radius: 50%;
+  opacity: 0;
+  animation: shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(100%);
+  }
+}
+
+/* Efecto de pulso suave en el contenedor */
+.logo-container::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 140px;
+  height: 140px;
+  background: radial-gradient(circle, rgba(0, 189, 242, 0.1) 0%, transparent 70%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: pulse 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 0.1;
+  }
+}
+
+.welcome-content h1 {
   color: #333;
   margin-bottom: 15px;
   font-size: 2.2rem;
@@ -133,7 +223,9 @@
   font-size: 1rem;
   margin-bottom: 0;
   line-height: 1.4;
-}.admin-access {
+}
+
+.admin-access {
   margin-top: 35px;
   padding-top: 30px;
   border-top: 2px solid #eee;
