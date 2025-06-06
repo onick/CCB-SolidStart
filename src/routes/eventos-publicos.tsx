@@ -1765,7 +1765,7 @@ const EventosPublicos: Component = () => {
                             
                             // Si el evento está en curso y es el primer registro, hacer check-in automático
                             if (isEventoActivo(evento) && evento.registrados === 0) {
-                              alert(`🎉 ¡Registro e ingreso exitoso!\n\nNombre: ${registroData().nombre}\nEmail: ${registroData().email}\nCódigo: ${codigo}\n\n✅ Como el evento ya está en curso, tu check-in se ha realizado automáticamente.\n🎪 ¡Disfruta el evento!`);
+                              alert(`🎉 ¡Registro e ingreso exitoso!\n\nNombre: ${registroData().nombre}\nEmail: ${registroData().email}\nCódigo: ${codigo}\n\n✅ El evento está en curso. Check-in automático.\n🎪 ¡Disfruta el evento!`);
                             } else {
                               alert(`🎉 ¡Registro exitoso!\n\nNombre: ${registroData().nombre}\nEmail: ${registroData().email}\nCódigo: ${codigo}\n\n📧 Recibirás un email con toda la información del evento.\n💡 Guarda tu código para hacer check-in el día del evento.`);
                             }
