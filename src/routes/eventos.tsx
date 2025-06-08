@@ -257,7 +257,8 @@ const Eventos: Component = () => {
       ubicacion: "",
       categoria: "concierto",
       capacidad: 50,
-      estado: "activo"
+      estado: "activo",
+      publico: "todos"
     });
   };
 
@@ -405,7 +406,8 @@ const Eventos: Component = () => {
       ubicacion: evento.ubicacion,
       categoria: evento.categoria,
       capacidad: evento.capacidad,
-      estado: evento.estado
+      estado: evento.estado,
+      publico: evento.publico || 'todos'
     });
     setShowEditModal(true);
   };
@@ -884,6 +886,32 @@ const Eventos: Component = () => {
                   </div>
                 </div>
 
+                <div style="margin-bottom: 1.5rem;">
+                  <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
+                    Público al que va dirigido
+                  </label>
+                  <select
+                    value={newEvent().publico || 'todos'}
+                    onChange={(e) => handleInputChange('publico', e.currentTarget.value)}
+                    style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#0ea5e9';
+                      e.target.style.background = '#ffffff';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#d1d5db';
+                      e.target.style.background = '#fafafa';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                  >
+                    <option value="todos">Todos</option>
+                    <option value="familia">Para toda la Familia</option>
+                    <option value="adulto">Adultos</option>
+                    <option value="ninos">Niños</option>
+                  </select>
+                </div>
+
                 <div>
                   <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
                     Descripción
@@ -908,69 +936,213 @@ const Eventos: Component = () => {
                   />
                 </div>
 
-                {/* Campo de Imagen */}
+                {/* Campo de Imagen - Mejorado */}
                 <div>
-                  <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
+                  <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.75rem;">
                     Imagen del Evento
                   </label>
-                  <div style="display: flex; flex-direction: column; gap: 1rem;">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onInput={(e) => {
-                        const file = e.currentTarget.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            const result = event.target?.result as string;
-                            handleInputChange('imagen', result);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      style="width: 100%; padding: 0.875rem 1rem; border: 2px dashed #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s; cursor: pointer;"
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0ea5e9';
-                        e.target.style.background = '#ffffff';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#d1d5db';
-                        e.target.style.background = '#fafafa';
-                      }}
-                    />
-                    <p style="font-size: 0.75rem; color: #6b7280; margin: 0;">
-                      📸 Sube una imagen representativa del evento (JPG, PNG, WebP)
-                    </p>
-                    
-                    {/* Vista previa de la imagen */}
-                    {newEvent().imagen && (
-                      <div class="image-preview-container" style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; max-width: 200px;">
-                        <img 
-                          src={newEvent().imagen} 
-                          alt="Vista previa del evento"
-                          style="width: 100%; height: 120px; object-fit: cover; display: block;"
-                        />
-                        <div style="padding: 0.5rem; background: #f9fafb; display: flex; justify-content: space-between; align-items: center;">
-                          <span style="font-size: 0.75rem; color: #374151;">Vista previa</span>
+                  
+                  {!newEvent().imagen ? (
+                    // Zona de subida de imagen profesional
+                    <div style="position: relative; border: 2px dashed #cbd5e1; border-radius: 12px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding: 1.5rem 1rem; text-align: center; transition: all 0.3s ease; cursor: pointer; group;"
+                         onDragOver={(e) => {
+                           e.preventDefault();
+                           e.currentTarget.style.borderColor = '#0ea5e9';
+                           e.currentTarget.style.background = 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)';
+                           e.currentTarget.style.transform = 'scale(1.02)';
+                         }}
+                         onDragLeave={(e) => {
+                           e.currentTarget.style.borderColor = '#cbd5e1';
+                           e.currentTarget.style.background = 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
+                           e.currentTarget.style.transform = 'scale(1)';
+                         }}
+                         onDrop={(e) => {
+                           e.preventDefault();
+                           const file = e.dataTransfer.files[0];
+                           if (file && file.type.startsWith('image/')) {
+                             const reader = new FileReader();
+                             reader.onload = (event) => {
+                               const result = event.target?.result as string;
+                               handleInputChange('imagen', result);
+                             };
+                             reader.readAsDataURL(file);
+                           }
+                           e.currentTarget.style.borderColor = '#cbd5e1';
+                           e.currentTarget.style.background = 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
+                           e.currentTarget.style.transform = 'scale(1)';
+                         }}
+                         onClick={() => document.getElementById('imageUpload')?.click()}>
+                      
+                      {/* Icono de imagen compacto */}
+                      <div style="width: 48px; height: 48px; margin: 0 auto 0.75rem; background: linear-gradient(135deg, #0ea5e9, #0284c7); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                          <path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 9l2-3 2 3 3-4 3 4H8z"/>
+                          <circle cx="8.5" cy="8.5" r="1.5"/>
+                        </svg>
+                      </div>
+                      
+                      {/* Título principal */}
+                      <h4 style="margin: 0 0 0.25rem; font-size: 1rem; font-weight: 600; color: #1e293b;">
+                        Subir Imagen del Evento
+                      </h4>
+                      
+                      {/* Descripción */}
+                      <p style="margin: 0 0 1rem; color: #64748b; font-size: 0.8rem; line-height: 1.4;">
+                        Arrastra y suelta una imagen aquí o haz clic para seleccionar
+                      </p>
+                      
+                      {/* Botón de acción */}
+                      <div style="display: inline-flex; align-items: center; gap: 0.5rem; background: white; border: 1px solid #e2e8f0; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 0.875rem; font-weight: 500; color: #374151; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer;"
+                           onMouseEnter={(e) => {
+                             e.target.style.background = '#f8fafc';
+                             e.target.style.borderColor = '#0ea5e9';
+                             e.target.style.transform = 'translateY(-1px)';
+                             e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                           }}
+                           onMouseLeave={(e) => {
+                             e.target.style.background = 'white';
+                             e.target.style.borderColor = '#e2e8f0';
+                             e.target.style.transform = 'translateY(0)';
+                             e.target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                           }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                        Seleccionar archivo
+                      </div>
+                      
+                      {/* Información técnica */}
+                      <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.1); border-radius: 6px;">
+                        <p style="margin: 0; font-size: 0.7rem; color: #4338ca; font-weight: 500;">
+                          ✨ Formatos: JPG, PNG, WebP • Max: 5MB
+                        </p>
+                      </div>
+                      
+                      {/* Input oculto */}
+                      <input
+                        id="imageUpload"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onInput={(e) => {
+                          const file = e.currentTarget.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const result = event.target?.result as string;
+                              handleInputChange('imagen', result);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;"
+                      />
+                    </div>
+                  ) : (
+                    // Vista previa profesional cuando hay imagen
+                    <div style="border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                      
+                      {/* Header de la vista previa */}
+                      <div style="padding: 0.75rem; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-bottom: 1px solid #e5e7eb;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                          <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="width: 28px; height: 28px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                              </svg>
+                            </div>
+                            <div>
+                              <h4 style="margin: 0; font-size: 0.8rem; font-weight: 600; color: #1e293b;">
+                                Imagen cargada correctamente
+                              </h4>
+                              <p style="margin: 0; font-size: 0.7rem; color: #64748b;">
+                                La imagen se mostrará en el evento
+                              </p>
+                            </div>
+                          </div>
+                          
                           <button
                             type="button"
-                            onclick={() => handleInputChange('imagen', '')}
-                            style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s;"
+                            onClick={() => handleInputChange('imagen', '')}
+                            style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border: none; padding: 0.5rem; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;"
                             onMouseEnter={(e) => {
-                              e.target.style.background = '#dc2626';
+                              e.target.style.background = 'linear-gradient(135deg, #dc2626, #b91c1c)';
                               e.target.style.transform = 'scale(1.05)';
+                              e.target.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.4)';
                             }}
                             onMouseLeave={(e) => {
-                              e.target.style.background = '#ef4444';
+                              e.target.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
                               e.target.style.transform = 'scale(1)';
+                              e.target.style.boxShadow = 'none';
                             }}
                           >
-                            🗑️ Eliminar
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                            </svg>
                           </button>
                         </div>
                       </div>
-                    )}
-                  </div>
+                      
+                      {/* Imagen de vista previa */}
+                      <div style="position: relative; height: 140px; background: #f8fafc;">
+                        <img 
+                          src={newEvent().imagen} 
+                          alt="Vista previa del evento"
+                          style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                        />
+                        
+                        {/* Overlay con información */}
+                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.7)); padding: 1rem 0.75rem 0.75rem; color: white;">
+                          <p style="margin: 0; font-size: 0.8rem; font-weight: 500;">
+                            Vista previa de la imagen del evento
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {/* Footer con acciones */}
+                      <div style="padding: 0.75rem; background: #f8fafc; border-top: 1px solid #e5e7eb;">
+                        <div style="display: flex; justify-content: center;">
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById('imageUpload2')?.click()}
+                            style="display: inline-flex; align-items: center; gap: 0.5rem; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(14, 165, 233, 0.2);"
+                            onMouseEnter={(e) => {
+                              e.target.style.background = 'linear-gradient(135deg, #0284c7, #0369a1)';
+                              e.target.style.transform = 'translateY(-1px)';
+                              e.target.style.boxShadow = '0 4px 12px rgba(14, 165, 233, 0.3)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.background = 'linear-gradient(135deg, #0ea5e9, #0284c7)';
+                              e.target.style.transform = 'translateY(0)';
+                              e.target.style.boxShadow = '0 2px 4px rgba(14, 165, 233, 0.2)';
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                            </svg>
+                            Cambiar imagen
+                          </button>
+                          
+                          <input
+                            id="imageUpload2"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onInput={(e) => {
+                              const file = e.currentTarget.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const result = event.target?.result as string;
+                                  handleInputChange('imagen', result);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            style="display: none;"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1187,7 +1359,7 @@ const Eventos: Component = () => {
               </div>
 
               {/* Botones de Acción */}
-              <div style="display: flex; justify-content: flex-end; gap: 1rem; padding-top: 2rem; border-top: 1px solid #e5e7eb;">
+              <div style="display: flex; justify-content: center; gap: 1rem; padding-top: 2rem; border-top: 1px solid #e5e7eb;">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
@@ -1404,7 +1576,7 @@ const Eventos: Component = () => {
               </div>
 
               {/* Botones de Acción */}
-              <div style="display: flex; justify-content: flex-end; gap: 1rem; padding-top: 2rem; border-top: 1px solid #e5e7eb;">
+              <div style="display: flex; justify-content: center; gap: 1rem; padding-top: 2rem; border-top: 1px solid #e5e7eb;">
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
