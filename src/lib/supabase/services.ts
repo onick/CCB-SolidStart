@@ -5,9 +5,19 @@ import { mockEstadisticas } from './mock-data';
 const isSupabaseConfigured = () => {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  // USAR DATOS LOCALES hasta que todo funcione perfectamente
-  console.log('🏠 TRABAJANDO CON DATOS LOCALES - Desarrollo y pruebas');
-  return false; // Usar localStorage/mock para desarrollo
+  
+  // Verificar si las credenciales están configuradas correctamente
+  const configured = url && key && 
+    !url.includes('tu-proyecto') && 
+    !key.includes('tu-anon-key');
+  
+  if (configured) {
+    console.log('🚀 CONECTANDO A SUPABASE - Base de datos en producción');
+    return true;
+  } else {
+    console.log('🏠 TRABAJANDO CON DATOS LOCALES - Desarrollo y pruebas');
+    return false;
+  }
 };
 
 // Datos mock para eventos cuando Supabase no está configurado
