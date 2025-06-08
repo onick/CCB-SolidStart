@@ -1,0 +1,14 @@
+# Configuración de Supabase para Centro Cultural Banreservas
+# Copia este archivo a .env y rellena con tus credenciales reales
+
+# URL de tu proyecto en Supabase (reemplaza con la tuya)
+VITE_SUPABASE_URL=https://tu-proyecto-id.supabase.co
+
+# Clave pública/anon de Supabase (reemplaza con la tuya)  
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.tu-clave-aqui
+
+# Clave de servicio (opcional, para operaciones administrativas)
+SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
+
+# Configuración del entorno
+NODE_ENV=development 

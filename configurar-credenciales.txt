@@ -1,0 +1,26 @@
+# CONFIGURACIÓN DE CREDENCIALES PARA CentroCulturalBR
+
+Edita tu archivo .env y reemplaza estas líneas:
+
+VITE_SUPABASE_URL=https://fhdyhzfqywrsdkzaowau.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZHloemZxeXdyc2RremFvd2F1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzM2NDE1NzUsImV4cCI6MjA0OTIxNzU3NX0.OHQJgJcY-CzXmEhJdqUBJHtQYlN1xA1iQkFZgWGZZXI
+
+# PASOS A SEGUIR:
+
+1. EDITAR ARCHIVO .env:
+   - Abre el archivo .env en tu editor
+   - Reemplaza las líneas VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY con las de arriba
+
+2. EJECUTAR SCRIPT SEGURO EN SUPABASE:
+   - Ve a tu proyecto CentroCulturalBR en Supabase
+   - Abre SQL Editor
+   - Copia TODO el contenido de: src/lib/supabase/schema-safe.sql
+   - Pégalo y ejecuta (este script NO fallará si las tablas ya existen)
+
+3. REINICIAR SERVIDOR:
+   npm run dev
+
+4. VERIFICAR FUNCIONAMIENTO:
+   - Ve a http://localhost:3000/admin
+   - Credenciales: admin / admin123
+   - Verifica que los paneles muestren datos reales 

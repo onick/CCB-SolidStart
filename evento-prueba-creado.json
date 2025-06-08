@@ -1,0 +1,22 @@
+{
+  "evento_prueba": {
+    "id": "test-1749318207522",
+    "titulo": "🎸 Concierto Rock Dominicano - TEST",
+    "descripcion": "Evento de prueba creado para verificar que aparece en eventos públicos. ¡Una noche increíble con las mejores bandas de rock dominicano!",
+    "categoria": "Música",
+    "fecha": "2025-06-10",
+    "hora": "20:00",
+    "duracion": 3,
+    "ubicacion": "Auditorio Principal",
+    "capacidad": 200,
+    "registrados": 25,
+    "precio": 750,
+    "imagen": "",
+    "estado": "proximo",
+    "created_at": "2025-06-07T17:43:27.523Z",
+    "updated_at": "2025-06-07T17:43:27.523Z"
+  },
+  "filtro_aplicado": "estado === \"activo\" || estado === \"proximo\"",
+  "pasa_filtro": true,
+  "timestamp": "2025-06-07T17:43:27.526Z"
+}

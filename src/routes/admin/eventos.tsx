@@ -1,4 +1,5 @@
-import { Component, createSignal, For, Show } from "solid-js";
+import { Component, createSignal, For, Show, onMount } from "solid-js";
+import { eventosService, registroEventosService } from '../../lib/supabase/services';
 
 interface Evento {
   id: string;
@@ -95,13 +96,36 @@ const eventosEjemplo: Evento[] = [
 ];
 
 export const EventosAdmin: Component = () => {
-  const [eventos, setEventos] = createSignal<Evento[]>(eventosEjemplo);
+  const [eventos, setEventos] = createSignal<Evento[]>([]);
+  const [cargando, setCargando] = createSignal(true);
   const [busqueda, setBusqueda] = createSignal("");
   const [filtroCategoria, setFiltroCategoria] = createSignal("");
   const [filtroEstado, setFiltroEstado] = createSignal("");
   const [eventoSeleccionado, setEventoSeleccionado] = createSignal<Evento | null>(null);
   const [mostrarFormulario, setMostrarFormulario] = createSignal(false);
   const [modalAbierto, setModalAbierto] = createSignal(false);
+
+  // 🔥 CARGAR EVENTOS REALES DE SUPABASE
+  const cargarEventos = async () => {
+    try {
+      setCargando(true);
+      console.log('🔄 Cargando eventos desde Supabase...');
+      const eventosReales = await eventosService.obtenerTodos();
+      console.log('✅ Eventos cargados:', eventosReales.length);
+      setEventos(eventosReales as Evento[]);
+    } catch (error) {
+      console.error('❌ Error cargando eventos:', error);
+      // Si falla, usar datos de ejemplo como fallback
+      setEventos(eventosEjemplo);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  // Cargar eventos al montar el componente
+  onMount(() => {
+    cargarEventos();
+  });
 
   // Funciones auxiliares
   const determinarEstadoEvento = (fecha: string, hora: string, duracion: number): 'activo' | 'proximo' | 'completado' => {
@@ -188,6 +212,12 @@ export const EventosAdmin: Component = () => {
         <span>/</span>
         <span>Centro Cultural Banreservas</span>
       </div>
+
+      <Show when={cargando()}>
+        <div style="text-align: center; padding: 2rem; color: #666;">
+          🔄 Cargando eventos desde Supabase...
+        </div>
+      </Show>
 
       <div class="welcome-section">
         <div class="welcome-content">

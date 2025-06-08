@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ECharts Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div id="test-chart" style="width: 600px; height: 400px;"></div>
+    <script>
+        const chart = echarts.init(document.getElementById('test-chart'));
+        const option = {
+            title: { text: 'ECharts Test' },
+            tooltip: {},
+            xAxis: { data: ['A', 'B', 'C', 'D', 'E'] },
+            yAxis: {},
+            series: [{
+                name: 'Test',
+                type: 'bar',
+                data: [5, 20, 36, 10, 10]
+            }]
+        };
+        chart.setOption(option);
+        console.log('✅ ECharts funcionando correctamente!');
+    </script>
+</body>
+</html> 

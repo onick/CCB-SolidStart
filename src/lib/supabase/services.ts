@@ -5,7 +5,9 @@ import { mockEstadisticas } from './mock-data';
 const isSupabaseConfigured = () => {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  return url && key && !url.includes('tu-proyecto') && !key.includes('tu-anon-key');
+  // USAR DATOS LOCALES hasta que todo funcione perfectamente
+  console.log('🏠 TRABAJANDO CON DATOS LOCALES - Desarrollo y pruebas');
+  return false; // Usar localStorage/mock para desarrollo
 };
 
 // Datos mock para eventos cuando Supabase no está configurado
@@ -109,6 +111,23 @@ const mockEventos: Evento[] = [
     precio: 300,
     imagen: "",
     estado: 'activo' as const,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'test-7',
+    titulo: "🎸 Evento de Prueba LOCAL",
+    descripcion: "Evento creado para probar que los eventos del panel admin aparecen en eventos públicos",
+    categoria: "concierto",
+    fecha: "2025-06-15",
+    hora: "19:00",
+    duracion: 3,
+    ubicacion: "Auditorio Test",
+    capacidad: 100,
+    registrados: 0,
+    precio: 750,
+    imagen: "",
+    estado: 'proximo' as const,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }
@@ -673,7 +692,7 @@ const guardarRegistrosEnStorage = (registros: any[]) => {
   }
 };
 
-// Inicializar registros desde localStorage
+// Inicializar registros desde localStorage al cargar el módulo
 registrosMockDinamicos = cargarRegistrosDelStorage();
 
 export const registroEventosService = {

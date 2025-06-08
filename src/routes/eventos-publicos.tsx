@@ -1,7 +1,7 @@
 import { useDrag } from 'solid-gesture';
 import { FaSolidHouse } from 'solid-icons/fa';
 import { Component, createSignal, For, onMount, Show } from 'solid-js';
-import { eventosService } from '../lib/supabase/services';
+import { eventosService, registroEventosService, visitantesService } from '../lib/supabase/services';
 import '../styles/global.css';
 
 const EventosPublicos: Component = () => {
@@ -28,8 +28,14 @@ const EventosPublicos: Component = () => {
   const [checkinData, setCheckinData] = createSignal({
     codigo: '',
     telefono: '',
-    metodo: 'codigo' // 'codigo' o 'telefono'
+    email: '',
+    metodo: 'codigo' // 'codigo', 'telefono', 'email'
   });
+
+  // NUEVOS ESTADOS PARA INTEGRACIÓN
+  const [showVisitorSearch, setShowVisitorSearch] = createSignal(false);
+  const [searchResults, setSearchResults] = createSignal<any>(null);
+  const [searchValue, setSearchValue] = createSignal('');
 
   // Estados para Sala Virtual
   const [tipoRegistroVirtual, setTipoRegistroVirtual] = createSignal('individual'); // 'individual' o 'grupal'
@@ -104,11 +110,20 @@ const EventosPublicos: Component = () => {
       const eventosData = await eventosService.obtenerTodos();
       console.log('📊 Eventos obtenidos:', eventosData);
       
-      // Solo mostrar eventos activos al público
-      const eventosActivos = eventosData.filter(evento => evento.estado === 'activo');
-      console.log('🎯 Eventos activos filtrados:', eventosActivos);
+      // TEMPORAL: Mostrar TODOS los eventos para diagnóstico
+      console.log('🔍 TODOS los eventos obtenidos:', eventosData);
+      console.log('🔍 Estados de eventos:');
+      eventosData.forEach((evento: any, index: number) => {
+        console.log(`   ${index + 1}. "${evento.titulo}" - Estado: "${evento.estado}"`);
+      });
       
-      setEventos(eventosActivos);
+      // Mostrar eventos activos y próximos (excluir solo completados)
+      const eventosDisponibles = eventosData.filter((evento: any) => 
+        evento.estado === 'activo' || evento.estado === 'proximo'
+      );
+      console.log('🎯 Eventos disponibles filtrados:', eventosDisponibles);
+      
+      setEventos(eventosDisponibles);
     } catch (error) {
       console.error('❌ Error cargando eventos:', error);
     } finally {
@@ -124,11 +139,20 @@ const EventosPublicos: Component = () => {
       const eventosData = await eventosService.obtenerTodos();
       console.log('📊 Eventos recargados:', eventosData);
       
-      // Solo mostrar eventos activos al público
-      const eventosActivos = eventosData.filter(evento => evento.estado === 'activo');
-      console.log('🎯 Eventos activos después de recarga:', eventosActivos);
+      // TEMPORAL: Mostrar TODOS los eventos recargados para diagnóstico
+      console.log('🔍 TODOS los eventos recargados:', eventosData);
+      console.log('🔍 Estados de eventos recargados:');
+      eventosData.forEach((evento: any, index: number) => {
+        console.log(`   ${index + 1}. "${evento.titulo}" - Estado: "${evento.estado}"`);
+      });
       
-      setEventos(eventosActivos);
+      // Mostrar eventos activos y próximos (excluir solo completados)
+      const eventosDisponibles = eventosData.filter((evento: any) => 
+        evento.estado === 'activo' || evento.estado === 'proximo'
+      );
+      console.log('🎯 Eventos disponibles después de recarga:', eventosDisponibles);
+      
+      setEventos(eventosDisponibles);
     } catch (error) {
       console.error('❌ Error recargando eventos:', error);
     } finally {
@@ -182,12 +206,28 @@ const EventosPublicos: Component = () => {
     const eventEndTime = new Date(eventDateTime.getTime() + (evento.duracion * 60 * 60 * 1000));
     const thirtyMinBefore = new Date(eventDateTime.getTime() - (30 * 60 * 1000));
     
+    // Si el evento ya terminó
     if (now > eventEndTime) {
       return { status: 'Finalizado', color: '#6B7280', bgColor: '#F3F4F6' };
-    } else if (now >= thirtyMinBefore && now <= eventEndTime) {
+    } 
+    // Si el evento está en curso (30 min antes hasta que termine)
+    else if (now >= thirtyMinBefore && now <= eventEndTime) {
       return { status: 'En curso', color: '#059669', bgColor: '#D1FAE5' };
-    } else {
-      return { status: 'Próximamente', color: '#EA580C', bgColor: '#FED7AA' };
+    } 
+    // Si el evento está próximo pero ya disponible para registros
+    else {
+      // Verificar si el evento está disponible para registros
+      const capacidad = evento.capacidad ?? evento.capacidad_maxima ?? 200;
+      const registrados = evento.registrados ?? 0;
+      const cuposDisponibles = evento.cupos_disponibles ?? (capacidad - registrados);
+      const tieneCapacidad = cuposDisponibles > 0 && !evento.esta_lleno;
+      
+      // Si tiene capacidad disponible, considerarlo activo
+      if (tieneCapacidad) {
+        return { status: 'Activo', color: '#059669', bgColor: '#D1FAE5' };
+      } else {
+        return { status: 'Próximamente', color: '#EA580C', bgColor: '#FED7AA' };
+      }
     }
   };
 
@@ -196,6 +236,187 @@ const EventosPublicos: Component = () => {
     const timestamp = Date.now();
     const hash = btoa(`${eventId}-${userEmail}-${timestamp}`).slice(0, 8);
     return `CCB-${hash.toUpperCase()}`;
+  };
+
+  // ========== FUNCIONES DE INTEGRACIÓN HÍBRIDA ==========
+
+  // Función para buscar visitante en base general
+  const buscarVisitanteGeneral = (email: string, telefono: string) => {
+    const visitantesData = localStorage.getItem('visitantes_ccb');
+    if (!visitantesData) return null;
+    
+    try {
+      const visitantes = JSON.parse(visitantesData);
+      
+      // Normalizar datos de búsqueda
+      const emailNormalizado = email.toLowerCase().trim();
+      const telefonoNormalizado = telefono.replace(/[\s\-\(\)]/g, '');
+      
+      return visitantes.find((visitante: any) => {
+        const visitanteEmail = visitante.email?.toLowerCase().trim();
+        const visitanteTelefono = visitante.telefono?.replace(/[\s\-\(\)]/g, '');
+        
+        return (emailNormalizado && visitanteEmail === emailNormalizado) ||
+               (telefonoNormalizado && visitanteTelefono === telefonoNormalizado);
+      });
+    } catch (error) {
+      console.error('Error al buscar visitante:', error);
+      return null;
+    }
+  };
+
+  // Función para sincronizar visitante a eventos si no existe
+  const sincronizarVisitanteAEventos = (visitante: any, eventoId: string, eventoTitulo: string) => {
+    // Verificar si ya existe en eventos
+    const registroExistente = verificarRegistroExistente(eventoId, visitante.email);
+    if (registroExistente) return registroExistente.codigo;
+    
+    // Crear nuevo registro de evento
+    const codigo = generateEventCode(eventoId, visitante.email);
+    guardarRegistroLocal(eventoId, visitante.email, visitante.nombre, codigo, eventoTitulo);
+    
+    return codigo;
+  };
+
+  // Función para crear visitante general desde registro de evento
+  const crearVisitanteDesdeEvento = (nombre: string, email: string, telefono: string) => {
+    const visitantesData = localStorage.getItem('visitantes_ccb');
+    let visitantes = [];
+    
+    if (visitantesData) {
+      try {
+        visitantes = JSON.parse(visitantesData);
+      } catch (error) {
+        console.error('Error al parsear visitantes:', error);
+        visitantes = [];
+      }
+    }
+    
+    // Verificar si ya existe
+    const existe = visitantes.find((v: any) => 
+      v.email?.toLowerCase() === email.toLowerCase()
+    );
+    
+    if (!existe) {
+      const nuevoVisitante = {
+        nombre,
+        email,
+        telefono: telefono || '',
+        comunicacion: 'CORREO ELECTRÓNICO',
+        aceptaUso: true,
+        fechaRegistro: new Date().toISOString(),
+        ultimaVisita: new Date().toISOString()
+      };
+      
+      visitantes.push(nuevoVisitante);
+      localStorage.setItem('visitantes_ccb', JSON.stringify(visitantes));
+    }
+  };
+
+  // Función expandida para check-in híbrido
+  const buscarParaCheckin = (metodo: string, valor: string) => {
+    if (metodo === 'codigo') {
+      // Buscar por código en registros de eventos
+      const registrosData = localStorage.getItem('ccb_registros_usuario');
+      if (!registrosData) return null;
+      
+      try {
+        const registros = JSON.parse(registrosData);
+        return registros.find((registro: any) => 
+          registro.codigo.toUpperCase() === valor.toUpperCase()
+        );
+      } catch (error) {
+        console.error('Error al buscar por código:', error);
+        return null;
+      }
+    } else {
+      // Buscar por email o teléfono en ambas bases
+      const email = metodo === 'email' ? valor : '';
+      const telefono = metodo === 'telefono' ? valor : '';
+      
+      // Primero buscar en visitantes generales
+      const visitante = buscarVisitanteGeneral(email, telefono);
+      if (visitante) {
+        return {
+          tipo: 'visitante_general',
+          nombre: visitante.nombre,
+          email: visitante.email,
+          telefono: visitante.telefono,
+          ultimaVisita: visitante.ultimaVisita
+        };
+      }
+      
+      // Luego buscar en registros de eventos
+      const registrosData = localStorage.getItem('ccb_registros_usuario');
+      if (registrosData) {
+        try {
+          const registros = JSON.parse(registrosData);
+          const registro = registros.find((r: any) => {
+            if (metodo === 'email') {
+              return r.email?.toLowerCase() === valor.toLowerCase();
+            } else {
+              // Para teléfono, buscar en registros que tengan teléfono
+              return false; // Los registros de eventos no siempre tienen teléfono
+            }
+          });
+          
+          if (registro) {
+            return {
+              tipo: 'registro_evento',
+              nombre: registro.nombre,
+              email: registro.email,
+              codigo: registro.codigo,
+              eventoTitulo: registro.eventoTitulo
+            };
+          }
+        } catch (error) {
+          console.error('Error al buscar en registros de eventos:', error);
+        }
+      }
+      
+      return null;
+    }
+  };
+
+  // Función para manejar búsqueda de visitante para pre-llenado
+  const buscarVisitanteParaEvento = () => {
+    const valor = searchValue().trim();
+    if (!valor) {
+      alert('❌ Por favor, ingresa tu email o teléfono para buscar tus datos.');
+      return;
+    }
+    
+    // Detectar automáticamente si es email o teléfono
+    const esEmail = valor.includes('@');
+    const email = esEmail ? valor : '';
+    const telefono = esEmail ? '' : valor;
+    
+    const visitante = buscarVisitanteGeneral(email, telefono);
+    
+    if (visitante) {
+      // Pre-llenar formulario con datos encontrados
+      setRegistroData({
+        nombre: visitante.nombre,
+        email: visitante.email,
+        telefono: visitante.telefono || ''
+      });
+      
+      setSearchResults(visitante);
+      setShowVisitorSearch(false);
+      
+      const ultimaVisita = new Date(visitante.ultimaVisita).toLocaleDateString('es-ES', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      
+      const tipoDetectado = esEmail ? 'email' : 'teléfono';
+      alert(`✅ ¡Datos encontrados por ${tipoDetectado}!\n\n👤 ${visitante.nombre}\n📧 ${visitante.email}\n📱 ${visitante.telefono}\n📅 Última visita: ${ultimaVisita}\n\n✨ Formulario completado automáticamente.`);
+    } else {
+      const tipoDetectado = esEmail ? 'email' : 'teléfono';
+      alert(`❌ No encontramos datos con ese ${tipoDetectado}.\n\n💡 Puedes registrarte normalmente y tus datos se guardarán para futuras visitas.`);
+      setSearchResults(null);
+    }
   };
 
   // Función para verificar si el usuario ya está registrado en un evento
@@ -235,11 +456,120 @@ const EventosPublicos: Component = () => {
       nombre,
       codigo,
       eventoTitulo,
-      fechaRegistro: new Date().toISOString()
+      fechaRegistro: new Date().toISOString(),
+      estado: 'confirmado'
     };
     
     registros.push(nuevoRegistro);
     localStorage.setItem('ccb_registros_usuario', JSON.stringify(registros));
+
+    // NUEVA: Sincronizar con servicios administrativos
+    sincronizarRegistroConAdmin(nuevoRegistro, eventoId);
+  };
+
+  // NUEVA FUNCIÓN: Sincronizar registro con servicios administrativos
+  const sincronizarRegistroConAdmin = async (registro: any, eventoId: string) => {
+    try {
+      console.log('🔄 Sincronizando registro con servicios administrativos...', registro);
+      
+      // PASO 1: Crear/buscar visitante en Supabase
+      const visitanteData = {
+        nombre: registro.nombre,
+        apellido: '', // Si no tienes apellido, usar string vacío
+        email: registro.email,
+        telefono: registro.telefono || '',
+        fecha_registro: new Date().toISOString(),
+        estado: 'activo' as const
+      };
+      
+      console.log('👤 Creando visitante en Supabase:', visitanteData);
+      const visitanteCreado = await visitantesService.crear(visitanteData);
+      
+      if (!visitanteCreado) {
+        console.log('❌ No se pudo crear visitante en Supabase');
+        return;
+      }
+      
+      console.log('✅ Visitante creado:', visitanteCreado.id);
+      
+      // PASO 2: Registrar en evento con ID real del visitante
+      console.log('📝 Registrando en evento con ID real del visitante');
+      await registroEventosService.registrarVisitanteEnEvento(
+        visitanteCreado.id, // ✅ Ahora usando ID real del visitante
+        eventoId,
+        registro.codigo
+      );
+      
+      console.log('✅ Registro sincronizado exitosamente con servicios administrativos');
+      
+      // Actualizar contador de registrados en el evento
+      actualizarContadorEventos(eventoId);
+      
+    } catch (error) {
+      console.error('❌ Error sincronizando registro con servicios administrativos:', error);
+      // El registro local ya se guardó, así que no es crítico
+    }
+  };
+
+  // NUEVA FUNCIÓN: Actualizar contador de registrados en eventos  
+  const actualizarContadorEventos = (eventoId: string) => {
+    console.log('📊 Actualizando contador para evento:', eventoId);
+    
+    try {
+      // 1. Actualizar estado local (eventos públicos)
+      setEventos(prev => prev.map(evento => {
+        if (evento.id === eventoId) {
+          console.log(`📈 Evento ${evento.titulo}: ${evento.registrados} → ${evento.registrados + 1}`);
+          return {
+            ...evento,
+            registrados: (evento.registrados || 0) + 1
+          };
+        }
+        return evento;
+      }));
+
+      // 2. CRÍTICO: Actualizar localStorage para sincronizar con panel admin
+      const eventosGuardados = localStorage.getItem('ccb_eventos_mock');
+      if (eventosGuardados) {
+        const eventos = JSON.parse(eventosGuardados);
+        const eventoIndex = eventos.findIndex((e: any) => e.id === eventoId);
+        
+        if (eventoIndex !== -1) {
+          eventos[eventoIndex].registrados = (eventos[eventoIndex].registrados || 0) + 1;
+          eventos[eventoIndex].updated_at = new Date().toISOString();
+          
+          localStorage.setItem('ccb_eventos_mock', JSON.stringify(eventos));
+          console.log('✅ Contador sincronizado en localStorage para panel admin');
+        }
+      }
+
+      // 3. Sincronizar con eventosService para máxima compatibilidad
+      try {
+        // Obtener evento actual y actualizar registrados
+        const eventoActual = eventos().find(e => e.id === eventoId);
+        if (eventoActual) {
+          const nuevosRegistrados = (eventoActual.registrados || 0) + 1;
+          console.log(`🔄 Sincronizando con eventosService: ${eventoActual.registrados} → ${nuevosRegistrados}`);
+          
+                     // Esto asegura que el panel admin vea los cambios inmediatamente
+           if (eventosService && eventosService.actualizar) {
+             eventosService.actualizar(eventoId, { 
+               registrados: nuevosRegistrados,
+               updated_at: new Date().toISOString()
+             }).then(() => {
+               console.log('✅ EventosService sincronizado');
+             }).catch((err) => {
+               console.log('⚠️ Error en sincronización eventosService:', err);
+             });
+           }
+        }
+      } catch (syncError) {
+        console.log('⚠️ Sincronización con eventosService falló, pero localStorage OK:', syncError);
+      }
+
+    } catch (error) {
+      console.error('❌ Error actualizando contador de eventos:', error);
+    }
   };
 
   // Función para validar formulario
@@ -253,9 +583,12 @@ const EventosPublicos: Component = () => {
     const data = checkinData();
     if (data.metodo === 'codigo') {
       return data.codigo.trim() !== '' && data.codigo.includes('CCB-');
-    } else {
+    } else if (data.metodo === 'email') {
+      return data.email.trim() !== '' && data.email.includes('@');
+    } else if (data.metodo === 'telefono') {
       return data.telefono.trim() !== '' && data.telefono.length >= 10;
     }
+    return false;
   };
 
   // Función para manejar cambios en inputs
@@ -284,8 +617,12 @@ const EventosPublicos: Component = () => {
     setCheckinData({
       codigo: '',
       telefono: '',
+      email: '',
       metodo: 'codigo'
     });
+    setShowVisitorSearch(false);
+    setSearchResults(null);
+    setSearchValue('');
   };
 
   // Función para abrir modal de registro
@@ -295,18 +632,51 @@ const EventosPublicos: Component = () => {
     limpiarFormulario(); // Limpiar formulario al abrir
   };
 
+  // Función mejorada para formatear fecha completa en español
   const formatDate = (fecha: string) => {
     const date = new Date(fecha);
+    
+    // Para la tarjeta compacta (día y mes)
     const day = date.getDate();
     const month = date.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase();
-    return { day, month };
+    
+    // Para la fecha completa
+    const fechaCompleta = date.toLocaleDateString('es-ES', { 
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+    
+    // Para fecha compacta con año
+    const fechaCompacta = date.toLocaleDateString('es-ES', { 
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+    
+    return { day, month, fechaCompleta, fechaCompacta };
   };
 
+  // Función mejorada para formatear hora en formato de 12 horas
   const formatTime = (hora: string) => {
-    return new Date(`2000-01-01T${hora}`).toLocaleTimeString('es-ES', {
+    const date = new Date(`2000-01-01T${hora}`);
+    
+    // Hora en formato 12 horas (AM/PM) con formato español limpio
+    const hora12 = date.toLocaleTimeString('es-ES', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }).replace(/\sa\.\sm\./, ' AM').replace(/\sp\.\sm\./, ' PM');
+    
+    // Hora en formato 24 horas
+    const hora24 = date.toLocaleTimeString('es-ES', {
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: false
     });
+    
+    return { hora12, hora24 };
   };
 
   const getCurrentTime = () => {
@@ -537,9 +907,45 @@ const EventosPublicos: Component = () => {
     }
   };
 
+  // NUEVA FUNCIÓN: Verificar estado de registros para debugging
+  const verificarEstadoRegistros = () => {
+    const registrosGuardados = localStorage.getItem('ccb_registros_usuario');
+    const visitantesGuardados = localStorage.getItem('visitantes_ccb');
+    
+    console.log('📊 ESTADO ACTUAL DE REGISTROS:');
+    
+    if (registrosGuardados) {
+      try {
+        const registros = JSON.parse(registrosGuardados);
+        console.log(`✅ Registros de eventos: ${registros.length}`);
+        registros.forEach((registro: any, index: number) => {
+          console.log(`   ${index + 1}. ${registro.nombre} - ${registro.eventoTitulo} - ${registro.codigo}`);
+        });
+      } catch (error) {
+        console.error('❌ Error leyendo registros de eventos:', error);
+      }
+    } else {
+      console.log('🚫 No hay registros de eventos en localStorage');
+    }
+    
+    if (visitantesGuardados) {
+      try {
+        const visitantes = JSON.parse(visitantesGuardados);
+        console.log(`✅ Visitantes generales: ${visitantes.length}`);
+      } catch (error) {
+        console.error('❌ Error leyendo visitantes generales:', error);
+      }
+    } else {
+      console.log('🚫 No hay visitantes generales en localStorage');
+    }
+  };
+
+  // Exponer función global para verificación desde consola del navegador
+  (window as any).verificarRegistrosCCB = verificarEstadoRegistros;
+
   return (
     <div style="min-height: 100vh; background: #F8FAFC; margin: 0; padding: 0;">
-      {/* Header Azul pegado al borde superior */}
+      {/* Header con logo CCB y navegación */}
       <header style="background: #0EA5E9; padding: 1rem; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.1); width: 100vw; margin: -30px 0 0 0; position: relative; left: 50%; right: 50%; margin-left: -50vw; margin-right: -50vw;">
         <div style="display: flex; align-items: center; gap: 1rem;">
           <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.95); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
@@ -882,11 +1288,11 @@ const EventosPublicos: Component = () => {
                           <div style="margin-bottom: 1rem;">
                             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                               <span style="color: #F59E0B;">📅</span>
-                              <span style="color: #6B7280; font-size: 0.85rem; font-weight: 500;">{formatDate(evento.fecha).day} de {formatDate(evento.fecha).month}</span>
+                              <span style="color: #374151; font-size: 0.9rem; font-weight: 600;">{formatDate(evento.fecha).fechaCompleta}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                               <span style="color: #F59E0B;">🕐</span>
-                              <span style="color: #6B7280; font-size: 0.85rem;">{formatTime(evento.hora)}</span>
+                              <span style="color: #374151; font-size: 0.9rem; font-weight: 600;">{formatTime(evento.hora).hora12}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                               <span style="color: #F59E0B;">📍</span>
@@ -1090,11 +1496,11 @@ const EventosPublicos: Component = () => {
                       <div style="margin-bottom: 1rem;">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                           <span style="color: #F59E0B;">📅</span>
-                          <span style="color: #6B7280; font-size: 0.85rem; font-weight: 500;">{formatDate(evento.fecha).day} de {formatDate(evento.fecha).month}</span>
+                          <span style="color: #374151; font-size: 0.9rem; font-weight: 600;">{formatDate(evento.fecha).fechaCompleta}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                           <span style="color: #F59E0B;">🕐</span>
-                          <span style="color: #6B7280; font-size: 0.85rem;">{formatTime(evento.hora)}</span>
+                          <span style="color: #374151; font-size: 0.9rem; font-weight: 600;">{formatTime(evento.hora).hora12}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                           <span style="color: #F59E0B;">📍</span>
@@ -1461,18 +1867,25 @@ const EventosPublicos: Component = () => {
                           <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
                             Método de Check-in
                           </label>
-                          <div style="display: flex; gap: 1rem;">
+                          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
                             <button
                               type="button"
                               onclick={() => handleCheckinChange('metodo', 'codigo')}
-                              style={`flex: 1; padding: 0.75rem; border: 2px solid ${checkinData().metodo === 'codigo' ? '#0EA5E9' : '#D1D5DB'}; background: ${checkinData().metodo === 'codigo' ? '#EFF6FF' : 'white'}; color: ${checkinData().metodo === 'codigo' ? '#0EA5E9' : '#6B7280'}; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;`}
+                              style={`padding: 0.75rem; border: 2px solid ${checkinData().metodo === 'codigo' ? '#0EA5E9' : '#D1D5DB'}; background: ${checkinData().metodo === 'codigo' ? '#EFF6FF' : 'white'}; color: ${checkinData().metodo === 'codigo' ? '#0EA5E9' : '#6B7280'}; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center;`}
                             >
                               🎫 Código
                             </button>
                             <button
                               type="button"
+                              onclick={() => handleCheckinChange('metodo', 'email')}
+                              style={`padding: 0.75rem; border: 2px solid ${checkinData().metodo === 'email' ? '#0EA5E9' : '#D1D5DB'}; background: ${checkinData().metodo === 'email' ? '#EFF6FF' : 'white'}; color: ${checkinData().metodo === 'email' ? '#0EA5E9' : '#6B7280'}; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center;`}
+                            >
+                              📧 Email
+                            </button>
+                            <button
+                              type="button"
                               onclick={() => handleCheckinChange('metodo', 'telefono')}
-                              style={`flex: 1; padding: 0.75rem; border: 2px solid ${checkinData().metodo === 'telefono' ? '#0EA5E9' : '#D1D5DB'}; background: ${checkinData().metodo === 'telefono' ? '#EFF6FF' : 'white'}; color: ${checkinData().metodo === 'telefono' ? '#0EA5E9' : '#6B7280'}; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;`}
+                              style={`padding: 0.75rem; border: 2px solid ${checkinData().metodo === 'telefono' ? '#0EA5E9' : '#D1D5DB'}; background: ${checkinData().metodo === 'telefono' ? '#EFF6FF' : 'white'}; color: ${checkinData().metodo === 'telefono' ? '#0EA5E9' : '#6B7280'}; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center;`}
                             >
                               📱 Teléfono
                             </button>
@@ -1501,6 +1914,27 @@ const EventosPublicos: Component = () => {
                           </div>
                         </Show>
 
+                        <Show when={checkinData().metodo === 'email'}>
+                          <div>
+                            <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                              Email Registrado *
+                            </label>
+                            <input 
+                              type="email" 
+                              placeholder="tu@email.com"
+                              required
+                              value={checkinData().email}
+                              onInput={(e) => handleCheckinChange('email', e.currentTarget.value)}
+                              style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                              onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                              onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                            />
+                            <p style="font-size: 0.75rem; color: #6B7280; margin: 0.25rem 0 0 0;">
+                              📧 Usa el email con el que te registraste o el de visitante general
+                            </p>
+                          </div>
+                        </Show>
+
                         <Show when={checkinData().metodo === 'telefono'}>
                           <div>
                             <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
@@ -1517,7 +1951,7 @@ const EventosPublicos: Component = () => {
                               onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
                             />
                             <p style="font-size: 0.75rem; color: #6B7280; margin: 0.25rem 0 0 0;">
-                              📱 Usa el teléfono con el que te registraste
+                              📱 Usa el teléfono con el que te registraste como visitante general
                             </p>
                           </div>
                         </Show>
@@ -1527,6 +1961,98 @@ const EventosPublicos: Component = () => {
                     // FORMULARIO DE REGISTRO NORMAL
                     return (
                       <>
+                        {/* Búsqueda de Visitante Existente */}
+                        <Show when={!showVisitorSearch()}>
+                          <div style="background: #F0F9FF; border: 1px solid #BAE6FD; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                              <div>
+                                <h4 style="color: #0369A1; font-size: 0.9rem; font-weight: 600; margin: 0 0 0.25rem 0;">
+                                  ¿Ya tienes cuenta?
+                                </h4>
+                                <p style="color: #0369A1; font-size: 0.8rem; margin: 0;">
+                                  Busca tus datos para un registro más rápido
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onclick={() => setShowVisitorSearch(true)}
+                                style="background: #0EA5E9; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;"
+                                onMouseOver={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#0284C7'}
+                                onMouseOut={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#0EA5E9'}
+                              >
+                                🔍 Buscar mis datos
+                              </button>
+                            </div>
+                          </div>
+                        </Show>
+
+                        {/* Panel de Búsqueda */}
+                        <Show when={showVisitorSearch()}>
+                          <div style="background: #EFF6FF; border: 2px solid #0EA5E9; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                              <h4 style="color: #0369A1; font-size: 0.9rem; font-weight: 600; margin: 0;">
+                                🔍 Buscar mis datos registrados
+                              </h4>
+                                                             <button
+                                 type="button"
+                                 onclick={() => {
+                                   setShowVisitorSearch(false);
+                                   setSearchValue('');
+                                 }}
+                                 style="background: transparent; color: #6B7280; border: none; font-size: 1.2rem; cursor: pointer; padding: 0.25rem; border-radius: 4px;"
+                                 onMouseOver={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#F3F4F6'}
+                                 onMouseOut={(e) => (e.target as HTMLButtonElement).style.backgroundColor = 'transparent'}
+                               >
+                                 ×
+                               </button>
+                             </div>
+                             
+                             <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                               <div>
+                                 <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                                   Email o Teléfono
+                                 </label>
+                                 <input
+                                   type="text"
+                                   placeholder="tu@email.com o 809-555-0123"
+                                   value={searchValue()}
+                                   onInput={(e) => setSearchValue(e.currentTarget.value)}
+                                   style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.95rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;"
+                                   onFocus={(e) => (e.target as HTMLInputElement).style.borderColor = '#0EA5E9'}
+                                   onBlur={(e) => (e.target as HTMLInputElement).style.borderColor = '#D1D5DB'}
+                                 />
+                                 <p style="font-size: 0.75rem; color: #6B7280; margin: 0.25rem 0 0 0;">
+                                   💡 Detectaremos automáticamente si es email o teléfono
+                                 </p>
+                               </div>
+                               
+                               <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                 <button
+                                   type="button"
+                                   onclick={buscarVisitanteParaEvento}
+                                   style="flex: 1; background: #10B981; color: white; border: none; padding: 0.75rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                                   onMouseOver={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#059669'}
+                                   onMouseOut={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#10B981'}
+                                 >
+                                   🔍 Buscar mis datos
+                                 </button>
+                                 <button
+                                   type="button"
+                                   onclick={() => {
+                                     setShowVisitorSearch(false);
+                                     setSearchValue('');
+                                   }}
+                                   style="background: #6B7280; color: white; border: none; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                                   onMouseOver={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#4B5563'}
+                                   onMouseOut={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#6B7280'}
+                                 >
+                                   Cancelar
+                                 </button>
+                               </div>
+                            </div>
+                          </div>
+                        </Show>
+
                         {/* Nombre Completo */}
                         <div>
                           <label style="display: block; color: #374151; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">
@@ -1669,22 +2195,65 @@ const EventosPublicos: Component = () => {
                         </button>
                       );
                     } else if (isCheckin) {
-                      // BOTÓN DE CHECK-IN
+                      // BOTÓN DE CHECK-IN HÍBRIDO
                       const isValid = validarCheckin();
                       return (
                         <button 
                           type="button"
                           onclick={() => {
-                            if (validarCheckin()) {
+                            if (!validarCheckin()) {
                               const metodo = checkinData().metodo;
-                              const valor = metodo === 'codigo' ? checkinData().codigo : checkinData().telefono;
-                              alert(`✅ Check-in realizado exitosamente!\n\nMétodo: ${metodo === 'codigo' ? 'Código' : 'Teléfono'}\nValor: ${valor}\n\n¡Disfruta el evento! 🎉`);
+                              const campo = metodo === 'codigo' ? 'código' : metodo === 'email' ? 'email' : 'teléfono';
+                              alert(`❌ Por favor, introduce tu ${campo} para hacer check-in.`);
+                              return;
+                            }
+
+                            const metodo = checkinData().metodo;
+                            let valor = '';
+                            
+                            if (metodo === 'codigo') {
+                              valor = checkinData().codigo;
+                            } else if (metodo === 'email') {
+                              valor = checkinData().email;
+                            } else {
+                              valor = checkinData().telefono;
+                            }
+
+                            // BÚSQUEDA HÍBRIDA
+                            const resultado = buscarParaCheckin(metodo, valor);
+                            
+                            if (resultado) {
+                              if (resultado.tipo === 'visitante_general') {
+                                // Check-in desde base de visitantes generales
+                                const ultimaVisita = new Date(resultado.ultimaVisita).toLocaleDateString('es-ES', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric'
+                                });
+                                
+                                alert(`✅ ¡Check-in exitoso desde visitante general!\n\n👤 ${resultado.nombre}\n📧 ${resultado.email}\n📱 ${resultado.telefono}\n📅 Última visita: ${ultimaVisita}\n\n🎪 ¡Disfruta el evento!`);
+                                
+                                // Crear registro de evento si no existe
+                                const codigo = sincronizarVisitanteAEventos(resultado, evento.id, evento.titulo);
+                                
+                              } else if (resultado.tipo === 'registro_evento') {
+                                // Check-in desde registro específico de evento
+                                alert(`✅ ¡Check-in exitoso!\n\n👤 ${resultado.nombre}\n📧 ${resultado.email}\n🎫 ${resultado.codigo}\n🎪 ${resultado.eventoTitulo}\n\n🎉 ¡Disfruta el evento!`);
+                              } else {
+                                // Check-in por código directo
+                                alert(`✅ ¡Check-in exitoso!\n\n👤 ${resultado.nombre}\n📧 ${resultado.email}\n🎫 ${resultado.codigo}\n🎪 ${resultado.eventoTitulo}\n\n🎉 ¡Disfruta el evento!`);
+                              }
+                              
                               setShowRegistroModal(false);
                               limpiarFormulario();
                             } else {
-                              const metodo = checkinData().metodo;
-                              const campo = metodo === 'codigo' ? 'código' : 'teléfono';
-                              alert(`❌ Por favor, introduce tu ${campo} para hacer check-in.`);
+                              let mensajeError = '';
+                              if (metodo === 'codigo') {
+                                mensajeError = `❌ Código "${valor}" no encontrado.\n\n💡 Verifica que sea correcto o intenta con tu email/teléfono.`;
+                              } else {
+                                mensajeError = `❌ No encontramos registros con ese ${metodo === 'email' ? 'email' : 'teléfono'}.\n\n💡 Verifica los datos o regístrate si es tu primera vez.`;
+                              }
+                              alert(mensajeError);
                             }
                           }}
                           style={`flex: 1; padding: 0.75rem; background: ${isValid ? '#10B981' : '#EF4444'}; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: ${isValid ? 'pointer' : 'not-allowed'}; transition: background-color 0.2s; opacity: ${isValid ? '1' : '0.7'};`}
@@ -1700,7 +2269,7 @@ const EventosPublicos: Component = () => {
                             }
                           }}
                         >
-                          {isValid ? '✅ Hacer Check-in' : `Introduce tu ${checkinData().metodo === 'codigo' ? 'código' : 'teléfono'}`}
+                          {isValid ? '✅ Hacer Check-in' : `Introduce tu ${checkinData().metodo === 'codigo' ? 'código' : checkinData().metodo === 'email' ? 'email' : 'teléfono'}`}
                         </button>
                       );
                     } else {
@@ -1757,17 +2326,21 @@ const EventosPublicos: Component = () => {
                               return;
                             }
                             
-                            // PROCEDER CON NUEVO REGISTRO
-                            const codigo = generateEventCode(evento.id, registroData().email);
+                            // PROCEDER CON NUEVO REGISTRO (CON INTEGRACIÓN)
+                            const data = registroData();
                             
-                            // Guardar registro en localStorage
-                            guardarRegistroLocal(evento.id, registroData().email, registroData().nombre, codigo, evento.titulo);
+                            // 1. Crear visitante general si no existe
+                            crearVisitanteDesdeEvento(data.nombre, data.email, data.telefono);
                             
-                            // Si el evento está en curso y es el primer registro, hacer check-in automático
+                            // 2. Generar código y guardar registro de evento
+                            const codigo = generateEventCode(evento.id, data.email);
+                            guardarRegistroLocal(evento.id, data.email, data.nombre, codigo, evento.titulo);
+                            
+                            // 3. Mensaje diferenciado según estado del evento
                             if (isEventoActivo(evento) && evento.registrados === 0) {
-                              alert(`🎉 ¡Registro e ingreso exitoso!\n\nNombre: ${registroData().nombre}\nEmail: ${registroData().email}\nCódigo: ${codigo}\n\n✅ El evento está en curso. Check-in automático.\n🎪 ¡Disfruta el evento!`);
+                              alert(`🎉 ¡Registro e ingreso exitoso!\n\n👤 ${data.nombre}\n📧 ${data.email}\n🎫 ${codigo}\n\n✅ El evento está en curso. Check-in automático.\n💾 Tus datos se han guardado para futuras visitas.\n🎪 ¡Disfruta el evento!`);
                             } else {
-                              alert(`🎉 ¡Registro exitoso!\n\nNombre: ${registroData().nombre}\nEmail: ${registroData().email}\nCódigo: ${codigo}\n\n📧 Recibirás un email con toda la información del evento.\n💡 Guarda tu código para hacer check-in el día del evento.`);
+                              alert(`🎉 ¡Registro exitoso!\n\n👤 ${data.nombre}\n📧 ${data.email}\n🎫 ${codigo}\n\n📧 Recibirás un email con la información del evento.\n💾 Tus datos se han guardado para futuras visitas.\n💡 Guarda tu código para hacer check-in el día del evento.`);
                             }
                             
                             setShowRegistroModal(false);

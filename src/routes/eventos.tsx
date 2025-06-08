@@ -2,6 +2,7 @@ import { Component, createSignal, For, onMount, Show } from 'solid-js';
 import { type Evento } from "../lib/supabase/client";
 import { eventosService } from '../lib/supabase/services';
 import '../styles/admin.css';
+import AdminLayout from '../components/AdminLayout';
 
 // solid-icons for better performance and native Solid.js integration
 import {
@@ -499,72 +500,7 @@ const Eventos: Component = () => {
   // }
 
   return (
-    <div class="admin-panel">
-      {/* MISMA Sidebar que admin.tsx */}
-      <aside class="admin-sidebar">
-        <div class="sidebar-header">
-          <div class="sidebar-logo">
-            <img src="/images/logo.png" alt="CCB" class="sidebar-logo-icon" />
-            <div class="sidebar-brand">
-              <h1>CCB Admin</h1>
-              <p>Centro Cultural</p>
-            </div>
-          </div>
-        </div>
-        
-        <nav class="sidebar-nav">
-          <div class="nav-section">
-            <div class="nav-section-title">Principal</div>
-            <div class="nav-item" onclick={() => window.location.href='/admin'} style="cursor: pointer;">
-              <FaSolidHouse size={18} color="white" />
-              <span>Dashboard</span>
-            </div>
-            <div class="nav-item">
-              <FaSolidChartBar size={18} color="white" />
-              <span>Reportes</span>
-            </div>
-            <div class="nav-item">
-              <FaSolidGear size={18} color="white" />
-              <span>Configuración</span>
-            </div>
-          </div>
-          
-          <div class="nav-section">
-            <div class="nav-section-title">Gestionar</div>
-            <div class="nav-item active">
-              <FaRegularCalendar size={18} color="#F39D1E" />
-              <span>Eventos</span>
-            </div>
-            <div class="nav-item">
-              <FaSolidUsers size={18} color="white" />
-              <span>Visitantes</span>
-            </div>
-            <div class="nav-item" onclick={() => window.location.href='/registros'} style="cursor: pointer;">
-              <FaSolidTicket size={18} color="white" />
-              <span>Registros</span>
-            </div>
-            <div class="nav-item">
-              <FaSolidTags size={18} color="white" />
-              <span>Promociones</span>
-            </div>
-          </div>
-          
-          <div class="nav-section">
-            <div class="nav-section-title">Herramientas</div>
-            <div class="nav-item">
-              <FaSolidCode size={18} color="white" />
-              <span>Integraciones</span>
-            </div>
-            <div class="nav-item">
-              <FaSolidDownload size={18} color="white" />
-              <span>Exportar</span>
-            </div>
-          </div>
-        </nav>
-      </aside>
-
-      {/* MISMO Main Content que admin.tsx */}
-      <main class="admin-main">
+    <AdminLayout currentPage="eventos" onLogout={handleLogout}>
         <header class="main-header">
           <div class="header-content">
             <div class="header-left">
@@ -859,7 +795,6 @@ const Eventos: Component = () => {
             </Show>
           </div>
         </div>
-      </main>
 
       {/* Modal Crear Evento - Diseño Profesional y Minimalista */}
       <Show when={showCreateModal()}>
@@ -1668,7 +1603,7 @@ const Eventos: Component = () => {
           }
         `}
       </style>
-    </div>
+    </AdminLayout>
   );
 };
 

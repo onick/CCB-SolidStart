@@ -175,6 +175,197 @@ body {
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 }
 
+/* ===== TARJETAS PROFESIONALES DE MÉTRICAS ===== */
+.metric-card-professional {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  cursor: pointer;
+}
+
+.metric-card-professional::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.metric-card-professional:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+}
+
+.metric-card-professional:hover::before {
+  opacity: 1;
+}
+
+.metric-card-professional.eventos {
+  border-left: 4px solid #3b82f6;
+  background: linear-gradient(135deg, #ffffff 0%, #f8faff 100%);
+}
+
+.metric-card-professional.visitantes {
+  border-left: 4px solid #10b981;
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+}
+
+.metric-card-professional.registros {
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%);
+}
+
+.metric-card-professional.checkins {
+  border-left: 4px solid #8b5cf6;
+  background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%);
+}
+
+.metric-header-professional {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.metric-icon-professional {
+  padding: 12px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.metric-card-professional.eventos .metric-icon-professional {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+}
+
+.metric-card-professional.visitantes .metric-icon-professional {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+}
+
+.metric-card-professional.registros .metric-icon-professional {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.metric-card-professional.checkins .metric-icon-professional {
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+}
+
+.metric-card-professional:hover .metric-icon-professional {
+  transform: rotate(5deg) scale(1.1);
+}
+
+.metric-title-professional {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+  letter-spacing: -0.025em;
+}
+
+.metric-subtitle-professional {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+}
+
+.metric-number-professional {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 4px;
+  letter-spacing: -0.05em;
+  background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.metric-description-professional {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.metric-footer-professional {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.metric-change-professional {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.metric-change-professional.positive {
+  color: #10b981;
+}
+
+.metric-change-professional.negative {
+  color: #ef4444;
+}
+
+.mini-chart-container {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.metric-card-professional:hover .mini-chart-container {
+  transform: scale(1.05);
+}
+
+/* Efectos de pulso para los gráficos en vivo */
+@keyframes pulse-chart {
+  0% { opacity: 1; }
+  50% { opacity: 0.8; }
+  100% { opacity: 1; }
+}
+
+.metric-card-professional.live .mini-chart-container {
+  animation: pulse-chart 2s ease-in-out infinite;
+}
+
+/* Indicador de datos en tiempo real */
+.live-indicator {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0% { 
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% { 
+    transform: scale(1.2);
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+  100% { 
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
 /* ===== MAIN ADMIN PANEL ===== */
 .admin-panel {
   display: flex;

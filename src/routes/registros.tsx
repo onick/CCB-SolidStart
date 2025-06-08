@@ -1,5 +1,7 @@
-import { Component, createSignal, For, onMount, Show } from 'solid-js';
+import { Component, createSignal, For, onMount, Show, onCleanup } from 'solid-js';
 import { eventosService, registroEventosService } from '../lib/supabase/services';
+import AdminLayout from '../components/AdminLayout';
+import * as echarts from 'echarts';
 // 🎨 Importando solid-icons para mejor rendimiento y integración nativa
 import {
     FaRegularCalendar,
@@ -40,14 +42,26 @@ const Registros: Component = () => {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [filterEstado, setFilterEstado] = createSignal('todos');
   const [filterEvento, setFilterEvento] = createSignal('todos');
-  const [showCheckinModal, setShowCheckinModal] = createSignal(false);
-  const [codigoCheckin, setCodigoCheckin] = createSignal('');
-  const [checkinResult, setCheckinResult] = createSignal(null);
+
+
+  // Variables para los gráficos ECharts
+  let chartEstadisticas: echarts.ECharts | null = null;
+  let chartTendencia: echarts.ECharts | null = null;
 
   onMount(() => {
     cargarDatos();
     // Auto-recarga cada 30 segundos
     setInterval(cargarDatos, 30000);
+    // Inicializar gráficos después de cargar datos
+    setTimeout(() => {
+      inicializarGraficos();
+    }, 1000);
+  });
+
+  // Limpiar gráficos ECharts al desmontar el componente
+  onCleanup(() => {
+    if (chartEstadisticas) chartEstadisticas.dispose();
+    if (chartTendencia) chartTendencia.dispose();
   });
 
   const cargarDatos = async () => {
@@ -77,55 +91,7 @@ const Registros: Component = () => {
     }
   };
 
-  const realizarCheckin = async (e: Event) => {
-    e.preventDefault();
-    if (!codigoCheckin().trim()) return;
 
-    try {
-      console.log('🔍 Buscando registro por código:', codigoCheckin());
-      const registro = await registroEventosService.buscarRegistroPorCodigo(codigoCheckin());
-      
-      if (!registro) {
-        setCheckinResult({ 
-          success: false, 
-          message: '❌ Código no encontrado. Verifica que sea correcto.' 
-        });
-        return;
-      }
-
-      if (registro.estado === 'checkin') {
-        setCheckinResult({ 
-          success: false, 
-          message: '⚠️ Este registro ya tiene check-in confirmado.' 
-        });
-        return;
-      }
-
-      console.log('✅ Registro encontrado, confirmando check-in...');
-      const success = await registroEventosService.confirmarCheckin(codigoCheckin());
-      
-      if (success) {
-        setCheckinResult({ 
-          success: true, 
-          message: `✅ Check-in confirmado exitosamente para ${registro.visitante?.nombre} ${registro.visitante?.apellido}` 
-        });
-        // Recargar datos
-        await cargarDatos();
-        setCodigoCheckin('');
-      } else {
-        setCheckinResult({ 
-          success: false, 
-          message: '❌ Error al confirmar check-in. Intenta de nuevo.' 
-        });
-      }
-    } catch (error) {
-      console.error('❌ Error en check-in:', error);
-      setCheckinResult({ 
-        success: false, 
-        message: '❌ Error del sistema. Intenta de nuevo.' 
-      });
-    }
-  };
 
   const filteredRegistros = () => {
     return registros().filter(registro => {
@@ -176,133 +142,318 @@ const Registros: Component = () => {
     return evento?.titulo || 'Evento no encontrado';
   };
 
-  return (
-    <div class="admin-panel">
-      {/* Sidebar */}
-      <aside class="admin-sidebar">
-        <div class="sidebar-header">
-          <div class="sidebar-logo">
-            <img src="/images/logo.png" alt="CCB" class="sidebar-logo-icon" />
-            <div class="sidebar-brand">
-              <h1>CCB Admin</h1>
-              <p>Centro Cultural</p>
-            </div>
-          </div>
-        </div>
-        
-        <nav class="sidebar-nav">
-          <div class="nav-section">
-            <div class="nav-section-title">Principal</div>
-            <div class="nav-item" onclick={() => window.location.href='/admin'} style="cursor: pointer;">
-              <FaSolidHouse size={18} color="#FFFFFF" />
-              <span>Dashboard</span>
-            </div>
-            <div class="nav-item">
-              <FaSolidChartBar size={18} color="#FFFFFF" />
-              <span>Reportes</span>
-            </div>
-            <div class="nav-item">
-              <FaSolidGear size={18} color="#FFFFFF" />
-              <span>Configuración</span>
-            </div>
-          </div>
-          
-          <div class="nav-section">
-            <div class="nav-section-title">Gestionar</div>
-            <div class="nav-item" onclick={() => window.location.href='/eventos'} style="cursor: pointer;">
-              <FaRegularCalendar size={18} color="#FFFFFF" />
-              <span>Eventos</span>
-            </div>
-            <div class="nav-item">
-              <FaSolidUsers size={18} color="#FFFFFF" />
-              <span>Visitantes</span>
-            </div>
-            <div class="nav-item active">
-              <FaSolidTicket size={18} color="#F39D1E" />
-              <span>Registros</span>
-            </div>
-            <div class="nav-item">
-              <FaSolidTags size={18} color="#FFFFFF" />
-              <span>Promociones</span>
-            </div>
-          </div>
-          
-          <div class="nav-section">
-            <div class="nav-section-title">Herramientas</div>
-            <div class="nav-item">
-              <FaSolidCode size={18} color="#FFFFFF" />
-              <span>Integraciones</span>
-            </div>
-            <div class="nav-item">
-              <FaSolidDownload size={18} color="#FFFFFF" />
-              <span>Exportar</span>
-            </div>
-          </div>
-        </nav>
-      </aside>
+  const handleLogout = () => {
+    localStorage.removeItem('admin_session');
+    window.location.href = '/admin';
+  };
 
-      {/* Main Content */}
-      <main class="admin-main">
+  // 🚀 Función para inicializar ambos gráficos ECharts
+  const inicializarGraficos = () => {
+    console.log('📊 ¡Inicializando gráficos ECharts!');
+    
+    // 🍩 GRÁFICO DE DONA - Estado de Registros
+    const chartContainer1 = document.getElementById('chartEstadisticasRegistros');
+    if (chartContainer1 && !chartEstadisticas) {
+      chartEstadisticas = echarts.init(chartContainer1);
+      
+      const pieOption = {
+        backgroundColor: 'transparent',
+        title: {
+          text: 'Estado de Registros',
+          subtext: `Total: ${estadisticas().total} registros`,
+          left: 'center',
+          top: 10,
+          textStyle: {
+            fontSize: 16,
+            fontWeight: 'bold',
+            color: '#1f2937'
+          },
+          subtextStyle: {
+            fontSize: 12,
+            color: '#6b7280'
+          }
+        },
+        tooltip: {
+          trigger: 'item',
+          backgroundColor: 'rgba(17, 24, 39, 0.95)',
+          borderColor: '#374151',
+          borderWidth: 1,
+          borderRadius: 8,
+          textStyle: {
+            color: '#f9fafb',
+            fontSize: 14
+          },
+          formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+          orient: 'horizontal',
+          bottom: 15,
+          itemGap: 25,
+          textStyle: {
+            fontSize: 12,
+            color: '#6b7280'
+          },
+          itemWidth: 18,
+          itemHeight: 14
+        },
+        series: [
+          {
+            name: 'Registros',
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['50%', '55%'],
+            avoidLabelOverlap: false,
+            emphasis: {
+              scale: true,
+              scaleSize: 8,
+              itemStyle: {
+                shadowBlur: 20,
+                shadowOffsetX: 0,
+                shadowColor: 'rgba(0, 0, 0, 0.3)'
+              }
+            },
+            labelLine: {
+              show: false
+            },
+            label: {
+              show: false,
+              position: 'center'
+            },
+            data: [
+              {
+                value: estadisticas().checkins,
+                name: 'Check-ins',
+                itemStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: '#34d399' },
+                    { offset: 1, color: '#10b981' }
+                  ])
+                }
+              },
+              {
+                value: estadisticas().confirmados,
+                name: 'Confirmados',
+                itemStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: '#60a5fa' },
+                    { offset: 1, color: '#3b82f6' }
+                  ])
+                }
+              },
+              {
+                value: estadisticas().pendientes,
+                name: 'Pendientes',
+                itemStyle: {
+                  color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: '#fbbf24' },
+                    { offset: 1, color: '#f59e0b' }
+                  ])
+                }
+              }
+            ],
+            animationType: 'scale',
+            animationDelay: function (idx) {
+              return Math.random() * 200;
+            }
+          }
+        ]
+      };
+      
+      chartEstadisticas.setOption(pieOption);
+    }
+
+    // 📈 GRÁFICO DE LÍNEA MODERNO - Tendencia de Registros
+    const chartContainer2 = document.getElementById('chartTendenciaRegistros');
+    if (chartContainer2 && !chartTendencia) {
+      chartTendencia = echarts.init(chartContainer2);
+      
+      const lineOption = {
+        backgroundColor: 'transparent',
+        title: {
+          text: 'Tendencia Semanal',
+          subtext: 'Últimos 7 días',
+          left: 'center',
+          top: 10,
+          textStyle: {
+            fontSize: 16,
+            fontWeight: 'bold',
+            color: '#1f2937'
+          },
+          subtextStyle: {
+            fontSize: 12,
+            color: '#6b7280'
+          }
+        },
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: 'rgba(17, 24, 39, 0.95)',
+          borderColor: '#374151',
+          borderWidth: 1,
+          borderRadius: 8,
+          textStyle: {
+            color: '#f9fafb',
+            fontSize: 13
+          },
+          axisPointer: {
+            type: 'cross',
+            crossStyle: {
+              color: '#6b7280'
+            }
+          }
+        },
+        legend: {
+          top: 35,
+          itemGap: 120,
+          itemWidth: 18,
+          itemHeight: 12,
+          textStyle: {
+            fontSize: 13,
+            color: '#6b7280',
+            padding: [0, 0, 0, 30]
+          }
+        },
+        grid: {
+          left: '5%',
+          right: '5%',
+          bottom: '10%',
+          top: '25%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+          axisLine: {
+            lineStyle: {
+              color: '#e5e7eb'
+            }
+          },
+          axisTick: {
+            show: false
+          },
+          axisLabel: {
+            color: '#6b7280',
+            fontSize: 12
+          }
+        },
+        yAxis: {
+          type: 'value',
+          axisLine: {
+            show: false
+          },
+          axisTick: {
+            show: false
+          },
+          axisLabel: {
+            color: '#6b7280',
+            fontSize: 12
+          },
+          splitLine: {
+            lineStyle: {
+              color: '#f3f4f6',
+              type: 'dashed'
+            }
+          }
+        },
+        series: [
+          {
+            name: 'Registros',
+            type: 'line',
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 8,
+            data: [12, 19, 15, 25, 18, 30, 22],
+            lineStyle: {
+              width: 3,
+              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: '#60a5fa' },
+                { offset: 1, color: '#3b82f6' }
+              ])
+            },
+            itemStyle: {
+              color: '#3b82f6',
+              borderColor: '#ffffff',
+              borderWidth: 2
+            },
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+                { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+              ])
+            },
+            emphasis: {
+              focus: 'series',
+              itemStyle: {
+                borderWidth: 3,
+                shadowBlur: 10,
+                shadowColor: 'rgba(59, 130, 246, 0.5)'
+              }
+            }
+          },
+          {
+            name: 'Check-ins',
+            type: 'line',
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 8,
+            data: [8, 14, 12, 20, 15, 25, 18],
+            lineStyle: {
+              width: 3,
+              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: '#34d399' },
+                { offset: 1, color: '#10b981' }
+              ])
+            },
+            itemStyle: {
+              color: '#10b981',
+              borderColor: '#ffffff',
+              borderWidth: 2
+            },
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
+                { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
+              ])
+            },
+            emphasis: {
+              focus: 'series',
+              itemStyle: {
+                borderWidth: 3,
+                shadowBlur: 10,
+                shadowColor: 'rgba(16, 185, 129, 0.5)'
+              }
+            }
+          }
+        ],
+        animationDuration: 1500
+      };
+      
+      chartTendencia.setOption(lineOption);
+    }
+
+    // 🎯 Hacer que los gráficos se adapten al tamaño de ventana
+    window.addEventListener('resize', () => {
+      if (chartEstadisticas) chartEstadisticas.resize();
+      if (chartTendencia) chartTendencia.resize();
+    });
+  };
+
+  return (
+    <AdminLayout currentPage="registros" onLogout={handleLogout}>
         <header class="main-header">
           <div class="header-content">
             <div class="header-left">
-              <h1 style="margin: 0; color: #1f2937; font-size: 28px; font-weight: 700;">
-                🎫 Control de Registros y Check-ins
+              <h1 style="font-size: 32px; font-weight: 800; color: #1F2937; margin: 0 0 8px 0;">
+                📋 Gestión de Registros
               </h1>
-              <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 16px;">
+              <p style="font-size: 16px; color: #6B7280; margin: 0;">
                 Monitorea y gestiona todos los registros de eventos en tiempo real
               </p>
-            </div>
-            <div class="header-actions">
-              <button 
-                onclick={() => setShowCheckinModal(true)}
-                style="
-                  background: linear-gradient(135deg, #10B981, #059669);
-                  color: white;
-                  padding: 14px 28px;
-                  border: none;
-                  border-radius: 12px;
-                  font-size: 16px;
-                  font-weight: 600;
-                  cursor: pointer;
-                  display: flex;
-                  align-items: center;
-                  gap: 10px;
-                  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
-                  transition: all 0.3s ease;
-                "
-                onMouseOver={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 12px 35px rgba(16, 185, 129, 0.4)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(16, 185, 129, 0.3)';
-                }}
-              >
-                <FaSolidQrcode size={16} color="white" />
-                <span>🎯 Check-in Directo</span>
-              </button>
             </div>
           </div>
         </header>
 
         <div class="main-content">
-          {/* Check-in Manual */}
-          <div style="background: white; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); text-align: center;">
-            <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #F39D1E, #E08A0F); border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-              <FaSolidQrcode size={32} color="white" />
-            </div>
-            <h2 style="color: #1f2937; margin-bottom: 8px; font-size: 24px; font-weight: 700;">Check-in Manual</h2>
-            <p style="color: #6b7280; margin-bottom: 20px;">Confirma la asistencia escaneando o ingresando códigos</p>
-            <button 
-              class="btn-primary"
-              onclick={() => setShowCheckinModal(true)}
-            >
-              Realizar Check-in
-            </button>
-          </div>
-
           {/* Estadísticas */}
           <div class="stats-grid">
             <div class="stat-card">
@@ -360,15 +511,34 @@ const Registros: Component = () => {
               <div class="stat-label">Registros de hoy</div>
             </div>
             
-            <div class="stat-card">
-              <div class="stat-header">
-                <div class="stat-icon teal">
-                  <FaSolidPercent size={24} color="white" />
-                </div>
-                <div class="stat-title">Tasa Asistencia</div>
+          </div>
+
+          {/* Gráficos de Estadísticas de Registros */}
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+            {/* Gráfico Estado de Registros */}
+            <div class="content-card">
+              <div class="card-header">
+                <h2 class="card-title">
+                  <FaSolidChartBar size={20} style={{"margin-right": "8px", "color": "#3b82f6"}} />
+                  Estado de Registros
+                </h2>
               </div>
-              <div class="stat-number">{estadisticas().tasaAsistencia}%</div>
-              <div class="stat-label">Porcentaje de asistencia</div>
+              <div style="padding: 20px; height: 350px;">
+                <div id="chartEstadisticasRegistros" style="width: 100%; height: 100%;"></div>
+              </div>
+            </div>
+
+            {/* Gráfico Tendencia de Registros */}
+            <div class="content-card">
+              <div class="card-header">
+                <h2 class="card-title">
+                  <FaSolidChartLine size={20} style={{"margin-right": "8px", "color": "#10b981"}} />
+                  Tendencia de Registros
+                </h2>
+              </div>
+              <div style="padding: 20px; height: 350px;">
+                <div id="chartTendenciaRegistros" style="width: 100%; height: 100%;"></div>
+              </div>
             </div>
           </div>
 
@@ -533,75 +703,7 @@ const Registros: Component = () => {
             </Show>
           </div>
         </div>
-      </main>
-
-      {/* Modal Check-in Directo */}
-      <Show when={showCheckinModal()}>
-        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
-          <div style="background: white; border-radius: 12px; padding: 24px; width: 90%; max-width: 500px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px;">
-              <h2 style="font-size: 24px; font-weight: bold; color: #1f2937; margin: 0;">🎯 Check-in Directo</h2>
-              <button
-                onClick={() => {
-                  setShowCheckinModal(false);
-                  setCodigoCheckin('');
-                  setCheckinResult(null);
-                }}
-                style="background: none; border: none; font-size: 28px; color: #6b7280; cursor: pointer; padding: 4px; border-radius: 6px;"
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={realizarCheckin} style="display: flex; flex-direction: column; gap: 20px;">
-              <div>
-                <label style="display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 6px;">
-                  🎫 Código de Confirmación
-                </label>
-                <input
-                  type="text"
-                  value={codigoCheckin()}
-                  onInput={(e) => setCodigoCheckin(e.currentTarget.value)}
-                  placeholder="Ej: CCB-001-234"
-                  required
-                  style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; font-family: monospace; box-sizing: border-box;"
-                />
-                <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 0;">
-                  Ingresa el código que recibió el visitante por email
-                </p>
-              </div>
-
-              <Show when={checkinResult()}>
-                <div style={`padding: 12px; border-radius: 8px; font-size: 14px; ${checkinResult().success ? 'background: #DEF7EC; border: 1px solid #10B981; color: #065F46;' : 'background: #FEF2F2; border: 1px solid #EF4444; color: #991B1B;'}`}>
-                  {checkinResult().message}
-                </div>
-              </Show>
-
-              <div style="display: flex; justify-content: flex-end; gap: 12px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCheckinModal(false);
-                    setCodigoCheckin('');
-                    setCheckinResult(null);
-                  }}
-                  style="padding: 12px 24px; background: #f3f4f6; color: #374151; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  style="padding: 12px 24px; background: #10B981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 8px;"
-                >
-                  <FaSolidCheck size={16} />
-                  Confirmar Check-in
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </Show>
-    </div>
+    </AdminLayout>
   );
 };
 

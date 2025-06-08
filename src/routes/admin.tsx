@@ -1,6 +1,8 @@
-import { Component, createEffect, createSignal, onMount, Show } from 'solid-js';
+import { Component, createEffect, createSignal, onMount, Show, onCleanup } from 'solid-js';
 import { eventosService, visitantesService } from '../lib/supabase/services';
 import '../styles/admin.css';
+import { Chart, registerables } from 'chart.js';
+import AdminLayout from '../components/AdminLayout';
 
 // solid-icons for better performance and native Solid.js integration
 import {
@@ -32,6 +34,9 @@ const isSupabaseConfigured = () => {
 };
 
 const Admin: Component = () => {
+  // Registrar todos los componentes de Chart.js
+  Chart.register(...registerables);
+  
   const [isAuthenticated, setIsAuthenticated] = createSignal(false);
   const [username, setUsername] = createSignal('');
   const [password, setPassword] = createSignal('');
@@ -45,6 +50,10 @@ const Admin: Component = () => {
     isLoading: true
   });
 
+  // Variables para los gráficos
+  let chartEventos: Chart | null = null;
+  let chartActividad: Chart | null = null;
+
   // Efecto que escucha los cambios de autenticación
   createEffect(() => {
     console.log('🔄 Efecto reactivo - isAuthenticated cambió a:', isAuthenticated());
@@ -55,6 +64,10 @@ const Admin: Component = () => {
     if (isAuthenticated()) {
       console.log('🔄 Usuario autenticado, cargando estadísticas...');
       cargarEstadisticas();
+      // Inicializar gráficos después de un pequeño delay para asegurar que el DOM esté listo
+      setTimeout(() => {
+        inicializarGraficos();
+      }, 1000);
     }
   });
 
@@ -76,6 +89,19 @@ const Admin: Component = () => {
     if (authStatus === 'true') {
       setIsAuthenticated(true);
     }
+
+    // Inicializar gráficos después de que el DOM esté listo
+    setTimeout(() => {
+      if (isAuthenticated()) {
+        inicializarGraficos();
+      }
+    }, 500);
+  });
+
+  // Limpiar gráficos al desmontar el componente
+  onCleanup(() => {
+    if (chartEventos) chartEventos.destroy();
+    if (chartActividad) chartActividad.destroy();
   });
 
   const handleLogin = async (e: Event) => {
@@ -144,6 +170,110 @@ const Admin: Component = () => {
       console.error('❌ Error cargando estadísticas:', error);
       // En caso de error, mantener valores por defecto pero ya no cargar
       setStats(prev => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  // Función para inicializar los gráficos del dashboard
+  const inicializarGraficos = () => {
+    console.log('📊 Inicializando gráficos del dashboard...');
+    
+    // Gráfico de Registros de Eventos
+    const ctxEventos = document.getElementById('chartEventos') as HTMLCanvasElement;
+    if (ctxEventos && !chartEventos) {
+      chartEventos = new Chart(ctxEventos, {
+        type: 'line',
+        data: {
+          labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+          datasets: [{
+            label: 'Registros',
+            data: [45, 62, 38, 75, 52, 89, 67],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointBackgroundColor: '#3b82f6',
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2,
+            pointRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              backgroundColor: 'rgba(17, 24, 39, 0.9)',
+              titleColor: '#f9fafb',
+              bodyColor: '#f9fafb',
+              cornerRadius: 8,
+              displayColors: false
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: '#f3f4f6'
+              },
+              ticks: {
+                color: '#6b7280'
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              },
+              ticks: {
+                color: '#6b7280'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Gráfico de Actividad de Visitantes
+    const ctxActividad = document.getElementById('chartActividad') as HTMLCanvasElement;
+    if (ctxActividad && !chartActividad) {
+      chartActividad = new Chart(ctxActividad, {
+        type: 'doughnut',
+        data: {
+          labels: ['Check-in', 'Registrados', 'Pendientes'],
+          datasets: [{
+            data: [stats().eventos.checkins, stats().visitantes.total - stats().eventos.checkins, stats().eventos.visitantes],
+            backgroundColor: [
+              '#10b981',
+              '#3b82f6', 
+              '#f59e0b'
+            ],
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                usePointStyle: true,
+                padding: 20,
+                color: '#6b7280'
+              }
+            },
+            tooltip: {
+              backgroundColor: 'rgba(17, 24, 39, 0.9)',
+              titleColor: '#f9fafb',
+              bodyColor: '#f9fafb',
+              cornerRadius: 8
+            }
+          }
+        }
+      });
     }
   };
 
@@ -285,72 +415,7 @@ const Admin: Component = () => {
   const renderAdminPanel = () => {
     console.log('✅ renderAdminPanel() ejecutada');
     return (
-      <div class="admin-panel">
-        {/* Sidebar */}
-        <aside class="admin-sidebar">
-          <div class="sidebar-header">
-            <div class="sidebar-logo">
-              <img src="/images/logo.png" alt="CCB" class="sidebar-logo-icon" />
-              <div class="sidebar-brand">
-                <h1>CCB Admin</h1>
-                <p>Centro Cultural</p>
-              </div>
-            </div>
-          </div>
-          
-          <nav class="sidebar-nav">
-            <div class="nav-section">
-              <div class="nav-section-title">Principal</div>
-              <div class="nav-item active">
-                <FaSolidHouse size={18} color="#F39D1E" />
-                <span>Dashboard</span>
-              </div>
-              <div class="nav-item">
-                <FaSolidChartBar size={18} color="white" />
-                <span>Reportes</span>
-              </div>
-              <div class="nav-item">
-                <FaSolidGear size={18} color="white" />
-                <span>Configuración</span>
-              </div>
-            </div>
-            
-            <div class="nav-section">
-              <div class="nav-section-title">Gestionar</div>
-              <div class="nav-item" onclick={() => window.location.href='/eventos'} style="cursor: pointer;">
-                <FaRegularCalendar size={18} color="white" />
-                <span>Eventos</span>
-              </div>
-              <div class="nav-item">
-                <FaSolidUsers size={18} color="white" />
-                <span>Visitantes</span>
-              </div>
-              <div class="nav-item" onclick={() => window.location.href='/registros'} style="cursor: pointer;">
-                <FaSolidTicket size={18} color="white" />
-                <span>Registros</span>
-              </div>
-              <div class="nav-item">
-                <FaSolidTags size={18} color="white" />
-                <span>Promociones</span>
-              </div>
-            </div>
-            
-            <div class="nav-section">
-              <div class="nav-section-title">Herramientas</div>
-              <div class="nav-item">
-                <FaSolidCode size={18} color="white" />
-                <span>Integraciones</span>
-              </div>
-              <div class="nav-item">
-                <FaSolidDownload size={18} color="white" />
-                <span>Exportar</span>
-              </div>
-            </div>
-          </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main class="admin-main">
+      <AdminLayout currentPage="dashboard" onLogout={handleLogout}>
           <header class="main-header">
             <div class="header-left">
               <div class="breadcrumb">
@@ -519,69 +584,28 @@ const Admin: Component = () => {
                 <div class="card-header">
                   <div>
                     <h2 class="card-title">Registros de Eventos</h2>
-                    <p class="card-subtitle">Feb 14 - Feb 21</p>
+                    <p class="card-subtitle">Últimos 7 días</p>
                   </div>
                 </div>
-                <div class="chart-placeholder">
-                  <div>
-                    📊 Aquí iría un gráfico de registros de eventos<br/>
-                    <small>Similar al gráfico "Product Sales" de hi events</small>
-                  </div>
+                <div style="height: 300px; padding: 20px;">
+                  <canvas id="chartEventos" width="400" height="300"></canvas>
                 </div>
               </div>
 
               <div class="content-card">
                 <div class="card-header">
                   <div>
-                    <h2 class="card-title">Actividad Reciente</h2>
+                    <h2 class="card-title">Estado de Visitantes</h2>
+                    <p class="card-subtitle">Distribución actual</p>
                   </div>
                 </div>
-                <div class="activity-list">
-                  <div class="activity-item">
-                    <div class="activity-avatar">
-                      <FaSolidUserCheck size={16} color="#4a90e2" />
-                    </div>
-                    <div class="activity-content">
-                      <div class="activity-text"><strong>María González</strong> se registró para "Concierto de Jazz"</div>
-                      <div class="activity-time">Hace 2 horas</div>
-                    </div>
-                  </div>
-                  
-                  <div class="activity-item">
-                    <div class="activity-avatar">
-                      <FaSolidCalendarDay size={16} color="#4a90e2" />
-                    </div>
-                    <div class="activity-content">
-                      <div class="activity-text"><strong>Evento creado:</strong> "Exposición de Arte Contemporáneo"</div>
-                      <div class="activity-time">Hace 5 horas</div>
-                    </div>
-                  </div>
-                  
-                  <div class="activity-item">
-                    <div class="activity-avatar">
-                      <FaSolidUsers size={16} color="#4a90e2" />
-                    </div>
-                    <div class="activity-content">
-                      <div class="activity-text"><strong>15 personas</strong> se registraron para "Taller de Fotografía"</div>
-                      <div class="activity-time">Ayer</div>
-                    </div>
-                  </div>
-                  
-                  <div class="activity-item">
-                    <div class="activity-avatar">
-                      <FaSolidStar size={16} color="#4a90e2" />
-                    </div>
-                    <div class="activity-content">
-                      <div class="activity-text"><strong>Evento destacado:</strong> "Noche de Poesía" alcanzó 100 registros</div>
-                      <div class="activity-time">Hace 2 días</div>
-                    </div>
-                  </div>
+                <div style="height: 300px; padding: 20px; display: flex; align-items: center; justify-content: center;">
+                  <canvas id="chartActividad" width="300" height="300"></canvas>
                 </div>
               </div>
             </div>
           </div>
-        </main>
-      </div>
+      </AdminLayout>
     );
   };
 
