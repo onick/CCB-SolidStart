@@ -160,11 +160,12 @@ const EventosPublicos: Component = () => {
     }
   };
 
-  // Auto-recarga cada 30 segundos para mantener sincronización
-  setInterval(() => {
-    console.log('⏰ Auto-recarga de eventos (cada 30s)');
-    recargarEventos();
-  }, 30000);
+  // 🔧 TEMPORAL: Auto-recarga deshabilitada para evitar duplicados
+  // TODO: Mover a onMount() para evitar múltiples intervalos
+  // setInterval(() => {
+  //   console.log('⏰ Auto-recarga de eventos (cada 30s)');
+  //   recargarEventos();
+  // }, 30000);
 
   // Ocultar información de sincronización después de 10 segundos
   setTimeout(() => {
@@ -482,6 +483,9 @@ const EventosPublicos: Component = () => {
         estado: 'activo' as const
       };
       
+      console.log('👤 Verificando si visitante ya existe:', registro.email);
+      
+      // Crear visitante (permitir emails duplicados para múltiples eventos)
       console.log('👤 Creando visitante en Supabase:', visitanteData);
       const visitanteCreado = await visitantesService.crear(visitanteData);
       
@@ -543,25 +547,24 @@ const EventosPublicos: Component = () => {
         }
       }
 
-      // 3. Sincronizar con eventosService para máxima compatibilidad
+      // 3. 🚨 CORRECCIÓN: NO actualizar contador aquí porque ya se actualizó en setEventos()
+      // La sincronización con eventosService debe usar el valor ACTUAL, no incrementarlo otra vez
       try {
-        // Obtener evento actual y actualizar registrados
         const eventoActual = eventos().find(e => e.id === eventoId);
         if (eventoActual) {
-          const nuevosRegistrados = (eventoActual.registrados || 0) + 1;
-          console.log(`🔄 Sincronizando con eventosService: ${eventoActual.registrados} → ${nuevosRegistrados}`);
+          console.log(`🔧 CORRECCIÓN: Sincronizando valor actual sin incrementar: ${eventoActual.registrados}`);
           
-                     // Esto asegura que el panel admin vea los cambios inmediatamente
-           if (eventosService && eventosService.actualizar) {
-             eventosService.actualizar(eventoId, { 
-               registrados: nuevosRegistrados,
-               updated_at: new Date().toISOString()
-             }).then(() => {
-               console.log('✅ EventosService sincronizado');
-             }).catch((err) => {
-               console.log('⚠️ Error en sincronización eventosService:', err);
-             });
-           }
+          // Esto asegura que el panel admin vea los cambios inmediatamente
+          if (eventosService && eventosService.actualizar) {
+            eventosService.actualizar(eventoId, { 
+              registrados: eventoActual.registrados, // ✅ USAR VALOR ACTUAL (ya incrementado)
+              updated_at: new Date().toISOString()
+            }).then(() => {
+              console.log('✅ EventosService sincronizado SIN duplicación');
+            }).catch((err) => {
+              console.log('⚠️ Error en sincronización eventosService:', err);
+            });
+          }
         }
       } catch (syncError) {
         console.log('⚠️ Sincronización con eventosService falló, pero localStorage OK:', syncError);
