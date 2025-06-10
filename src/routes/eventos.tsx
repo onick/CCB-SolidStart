@@ -224,7 +224,6 @@ const Eventos: Component = () => {
         categoria: 'concierto',
         capacidad: 100,
         estado: 'activo',
-        cupos: 100,
         imagen: ''
       });
       setShowCreateModal(false);
@@ -1285,12 +1284,12 @@ const Eventos: Component = () => {
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                   <div>
                     <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Cantidad de Cupos
+                      Capacidad Máxima
                     </label>
                     <input
                       type="number"
-                      value={newEvent().cupos}
-                      onInput={(e) => handleInputChange('cupos', parseInt(e.currentTarget.value) || 0)}
+                      value={newEvent().capacidad}
+                      onInput={(e) => handleInputChange('capacidad', parseInt(e.currentTarget.value) || 0)}
                       min="1"
                       max="10000"
                       style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"

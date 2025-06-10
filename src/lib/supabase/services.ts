@@ -1,13 +1,111 @@
 import { Evento, RegistroEvento, supabase, Visitante } from './client';
 import { mockEstadisticas } from './mock-data';
 
+// Redis para el lado del servidor únicamente
+let redisClient = null;
+let redisConnected = false;
+
+// Inicializar Redis solo en entorno de servidor
+const initRedis = async () => {
+  // Solo intentar Redis en Node.js (servidor), no en navegador
+  if (typeof window === 'undefined' && typeof process !== 'undefined') {
+    try {
+      const Redis = await import('redis');
+      redisClient = Redis.default.createClient({
+        url: process.env.REDIS_URL || 'redis://localhost:6379'
+      });
+      
+      await redisClient.connect();
+      redisConnected = true;
+      console.log('🚀 Redis conectado - Cache activado (servidor)');
+    } catch (error) {
+      console.log('💾 Redis no disponible - Usando Supabase directo:', error.message);
+      redisConnected = false;
+    }
+  } else {
+    // En el navegador, no usar Redis cache
+    console.log('🌐 Ejecutando en navegador - Cache Redis deshabilitado');
+    redisConnected = false;
+  }
+};
+
+// Cache en memoria para el navegador (simple)
+let memoryCache = new Map();
+let cacheTimestamps = new Map();
+const CACHE_TTL = 300000; // 5 minutos en milisegundos
+
+// Función para verificar si el cache es válido
+const isCacheValid = (key: string): boolean => {
+  const timestamp = cacheTimestamps.get(key);
+  if (!timestamp) return false;
+  return (Date.now() - timestamp) < CACHE_TTL;
+};
+
+// Función para obtener desde cache
+const getFromCache = (key: string) => {
+  if (isCacheValid(key)) {
+    return memoryCache.get(key);
+  }
+  // Cache expirado, limpiar
+  memoryCache.delete(key);
+  cacheTimestamps.delete(key);
+  return null;
+};
+
+// Función para guardar en cache
+const setCache = (key: string, data: any) => {
+  memoryCache.set(key, data);
+  cacheTimestamps.set(key, Date.now());
+};
+
+// Función para invalidar cache
+const invalidateCache = (pattern?: string) => {
+  if (pattern) {
+    // Invalidar claves que coincidan con el patrón
+    for (const key of memoryCache.keys()) {
+      if (key.includes(pattern)) {
+        memoryCache.delete(key);
+        cacheTimestamps.delete(key);
+      }
+    }
+  } else {
+    // Limpiar todo el cache
+    memoryCache.clear();
+    cacheTimestamps.clear();
+  }
+  console.log('🗑️ Cache invalidado' + (pattern ? ` (patrón: ${pattern})` : ' (completo)'));
+};
+
+// Función pública para invalidar cache manualmente
+export const forceInvalidateCache = () => {
+  invalidateCache();
+  console.log('🔄 Cache forzadamente invalidado');
+};
+
 // Función para verificar si Supabase está configurado
 const isSupabaseConfigured = () => {
-  const url = import.meta.env.VITE_SUPABASE_URL;
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  // USAR DATOS LOCALES hasta que todo funcione perfectamente
-  console.log('🏠 TRABAJANDO CON DATOS LOCALES - Desarrollo y pruebas');
-  return false; // Usar localStorage/mock para desarrollo
+  try {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    // Verificar que las credenciales existan y no sean valores por defecto
+    const configured = Boolean(url && key && 
+                      !url.includes('tu-proyecto') && 
+                      !key.includes('tu-anon-key') &&
+                      url.length > 10 && 
+                      key.length > 10);
+    
+    if (configured) {
+      console.log('✅ SUPABASE CONFIGURADO - Usando base de datos real');
+    } else {
+      console.log('🏠 TRABAJANDO CON DATOS LOCALES - Desarrollo y pruebas');
+    }
+    
+    return configured;
+  } catch (error) {
+    console.error('❌ Error verificando configuración de Supabase:', error);
+    return false;
+  }
 };
 
 // Datos mock para eventos cuando Supabase no está configurado
@@ -185,38 +283,95 @@ const verificarDisponibilidad = (eventoId: string): { disponible: boolean; cupos
   };
 };
 
-// Actualizar contador de registrados para un evento
-const actualizarContadorRegistrados = (eventoId: string, incremento: number = 1): boolean => {
-  const eventoIndex = eventosMockDinamicos.findIndex(e => e.id === eventoId);
-  if (eventoIndex === -1) return false;
-  
-  const evento = eventosMockDinamicos[eventoIndex];
-  const nuevosRegistrados = evento.registrados + incremento;
-  
-  // Validar que no exceda la capacidad (a menos que sea un decremento)
-  if (incremento > 0 && nuevosRegistrados > evento.capacidad) {
-    console.warn(`⚠️ No se puede registrar: evento ${eventoId} alcanzó su capacidad máxima`);
+// Actualizar contador de registrados en Supabase (función real)
+const actualizarContadorEnSupabase = async (eventoId: string, incremento: number = 1): Promise<boolean> => {
+  try {
+    // 1. Obtener evento actual
+    const { data: evento, error: errorGet } = await supabase
+      .from('eventos')
+      .select('registrados, capacidad')
+      .eq('id', eventoId)
+      .single();
+
+    if (errorGet) {
+      console.error('❌ Error obteniendo evento:', errorGet);
+      return false;
+    }
+
+    const nuevosRegistrados = evento.registrados + incremento;
+
+    // 2. Validaciones
+    if (incremento > 0 && nuevosRegistrados > evento.capacidad) {
+      console.warn(`⚠️ No se puede registrar: evento ${eventoId} alcanzó capacidad máxima`);
+      return false;
+    }
+
+    if (nuevosRegistrados < 0) {
+      console.warn(`⚠️ Registrados no puede ser negativo`);
+      return false;
+    }
+
+    // 3. Actualizar contador en Supabase
+    const { error: errorUpdate } = await supabase
+      .from('eventos')
+      .update({ 
+        registrados: nuevosRegistrados,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', eventoId);
+
+    if (errorUpdate) {
+      console.error('❌ Error actualizando contador:', errorUpdate);
+      return false;
+    }
+
+    console.log(`✅ Contador actualizado en Supabase: ${evento.registrados} → ${nuevosRegistrados}`);
+    return true;
+
+  } catch (error) {
+    console.error('❌ Error en actualizarContadorEnSupabase:', error);
     return false;
   }
-  
-  // Validar que no sea negativo
-  if (nuevosRegistrados < 0) {
-    console.warn(`⚠️ No se puede decrementar: registrados no puede ser negativo`);
+};
+
+// Función para recalcular contador basado en registros reales
+const recalcularContador = async (eventoId: string): Promise<boolean> => {
+  try {
+    // 1. Contar registros reales en la tabla
+    const { count, error: errorCount } = await supabase
+      .from('registro_eventos')
+      .select('*', { count: 'exact', head: true })
+      .eq('evento_id', eventoId)
+      .in('estado', ['pendiente', 'confirmado']); // Solo contar estados válidos
+
+    if (errorCount) {
+      console.error('❌ Error contando registros:', errorCount);
+      return false;
+    }
+
+    const registrosReales = count || 0;
+
+    // 2. Actualizar el evento con el conteo real
+    const { error: errorUpdate } = await supabase
+      .from('eventos')
+      .update({ 
+        registrados: registrosReales,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', eventoId);
+
+    if (errorUpdate) {
+      console.error('❌ Error actualizando contador recalculado:', errorUpdate);
+      return false;
+    }
+
+    console.log(`🔄 Contador recalculado para evento ${eventoId}: ${registrosReales} registros`);
+    return true;
+
+  } catch (error) {
+    console.error('❌ Error en recalcularContador:', error);
     return false;
   }
-  
-  // Actualizar el contador
-  eventosMockDinamicos[eventoIndex] = {
-    ...evento,
-    registrados: nuevosRegistrados,
-    updated_at: new Date().toISOString()
-  };
-  
-  // Guardar en localStorage
-  guardarEventosEnStorage(eventosMockDinamicos);
-  
-  console.log(`✅ Contador actualizado para evento ${eventoId}: ${evento.registrados} -> ${nuevosRegistrados}`);
-  return true;
 };
 
 // Determinar estado dinámico del evento (incluyendo "agotado")
@@ -325,59 +480,43 @@ export const visitantesService = {
 
 export const eventosService = {
   async obtenerTodos(): Promise<Evento[]> {
-    // Si Supabase no está configurado, usar datos mock
-    if (!isSupabaseConfigured()) {
-      console.log('🧪 Usando datos mock para eventos (Supabase no configurado)');
-      
-      // Enriquecer eventos con información de disponibilidad
-      const eventosEnriquecidos = eventosMockDinamicos.map(evento => {
-        const disponibilidad = verificarDisponibilidad(evento.id);
-        const estadoDinamico = determinarEstadoEvento(evento);
-        
-        return {
-          ...evento,
-          // Agregar campos de disponibilidad
-          cupos_disponibles: disponibilidad.cuposLibres,
-          capacidad_maxima: disponibilidad.capacidad,
-          esta_lleno: !disponibilidad.disponible,
-          estado_dinamico: estadoDinamico,
-          // Mantener el estado original también
-          estado_original: evento.estado
-        };
-      });
-      
-      return eventosEnriquecidos;
-    }
+    const cacheKey = 'eventos:all';
+    
+    try {
+      // 1. Intentar obtener desde cache en memoria (navegador)
+      const cached = getFromCache(cacheKey);
+      if (cached) {
+        console.log('🚀 Cache HIT - Memoria');
+        return cached;
+      }
 
-    const { data, error } = await supabase
-      .from('eventos')
-      .select('*')
-      .order('fecha', { ascending: true });
-    
-    if (error) {
-      console.error('Error obteniendo eventos:', error);
-      console.log('🧪 Fallback a datos mock debido a error');
+      // 2. Cache MISS - Buscar en Supabase
+      console.log('💾 Cache MISS - Fetching from Supabase');
+      const { data, error } = await supabase
+        .from('eventos')
+        .select('*')
+        .order('fecha', { ascending: true });
       
-      // En caso de error, también devolver datos enriquecidos
-      const eventosEnriquecidos = eventosMockDinamicos.map(evento => {
-        const disponibilidad = verificarDisponibilidad(evento.id);
-        const estadoDinamico = determinarEstadoEvento(evento);
-        
-        return {
-          ...evento,
-          cupos_disponibles: disponibilidad.cuposLibres,
-          capacidad_maxima: disponibilidad.capacidad,
-          esta_lleno: !disponibilidad.disponible,
-          estado_dinamico: estadoDinamico,
-          estado_original: evento.estado
-        };
-      });
+      if (error) {
+        console.error('❌ Error obteniendo eventos de Supabase:', error);
+        return [];
+      }
+
+      const eventos = data || [];
       
-      return eventosEnriquecidos;
+      // 3. Guardar en cache en memoria
+      if (eventos.length > 0) {
+        setCache(cacheKey, eventos);
+        console.log(`💾 Cached en memoria: ${eventos.length} eventos`);
+      }
+
+      console.log(`✅ ${eventos.length} eventos obtenidos desde Supabase`);
+      return eventos;
+      
+    } catch (error) {
+      console.error('❌ Error general en obtenerTodos:', error);
+      return [];
     }
-    
-    // Para datos reales de Supabase, también enriquecer si es necesario
-    return data || [];
   },
 
   async obtenerPorId(id: string): Promise<Evento | null> {
@@ -402,41 +541,30 @@ export const eventosService = {
   },
 
   async crear(evento: Omit<Evento, 'id' | 'created_at' | 'updated_at'>): Promise<Evento | null> {
-    // Si Supabase no está configurado, simular creación en mock
-    if (!isSupabaseConfigured()) {
-      console.log('🧪 Simulando creación de evento en datos mock');
-      const nuevoEvento: Evento = {
-        ...evento,
-        id: (eventosMockDinamicos.length + 1).toString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      eventosMockDinamicos.push(nuevoEvento);
-      guardarEventosEnStorage(eventosMockDinamicos); // 💾 Guardar en localStorage
-      console.log('✅ Evento mock creado y guardado:', nuevoEvento.titulo);
-      return nuevoEvento;
-    }
+    try {
+      // 1. Crear evento en Supabase
+      const { data, error } = await supabase
+        .from('eventos')
+        .insert([evento])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Error creando evento:', error);
+        throw error;
+      }
 
-    const { data, error } = await supabase
-      .from('eventos')
-      .insert([evento])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creando evento:', error);
-      // Fallback a mock en caso de error
-      const nuevoEvento: Evento = {
-        ...evento,
-        id: (eventosMockDinamicos.length + 1).toString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      eventosMockDinamicos.push(nuevoEvento);
-      return nuevoEvento;
+      // 2. Invalidar cache en memoria
+      invalidateCache('eventos');
+      console.log('🗑️ Cache de eventos invalidado');
+      
+      console.log('✅ Evento creado y cache invalidado:', data.titulo);
+      return data;
+      
+    } catch (error) {
+      console.error('❌ Error en crear evento:', error);
+      throw error;
     }
-    
-    return data;
   },
 
   async actualizar(id: string, evento: Partial<Evento>): Promise<Evento | null> {
@@ -1130,3 +1258,227 @@ export const seedDataService = {
     console.log('✅ Datos iniciales poblados correctamente');
   }
 }; 
+
+// =============================================
+// SERVICIOS DE ESTADÍSTICAS REALES
+// =============================================
+
+export const estadisticasService = {
+  // Obtener estadísticas generales del dashboard
+  async obtenerEstadisticasGenerales() {
+    try {
+      console.log('📊 Obteniendo estadísticas generales...');
+      
+      // Obtener total de eventos
+      const { data: eventos, error: errorEventos } = await supabase
+        .from('eventos')
+        .select('id, registrados, precio, estado, created_at');
+      
+      if (errorEventos) {
+        console.error('Error obteniendo eventos:', errorEventos);
+        return null;
+      }
+
+      // Obtener total de visitantes únicos
+      const { data: visitantes, error: errorVisitantes } = await supabase
+        .from('visitantes')
+        .select('id, created_at');
+      
+      if (errorVisitantes) {
+        console.error('Error obteniendo visitantes:', errorVisitantes);
+        return null;
+      }
+
+      // Obtener registros de hoy
+      const hoy = new Date().toISOString().split('T')[0];
+      const { data: registrosHoy, error: errorRegistros } = await supabase
+        .from('registro_eventos')
+        .select('id, created_at')
+        .gte('created_at', `${hoy}T00:00:00`)
+        .lt('created_at', `${hoy}T23:59:59`);
+      
+      if (errorRegistros) {
+        console.error('Error obteniendo registros de hoy:', errorRegistros);
+        return null;
+      }
+
+      // Calcular estadísticas
+      const totalEventos = eventos.length;
+      const eventosActivos = eventos.filter(e => e.estado === 'activo').length;
+      const totalVisitantes = visitantes.length;
+      const registrosHoyCount = registrosHoy.length;
+      const totalRegistrados = eventos.reduce((sum, evento) => sum + (evento.registrados || 0), 0);
+      const ingresosTotales = eventos.reduce((sum, evento) => 
+        sum + ((evento.registrados || 0) * (evento.precio || 0)), 0
+      );
+
+      const estadisticas = {
+        totalEventos,
+        eventosActivos,
+        totalVisitantes,
+        registrosHoy: registrosHoyCount,
+        totalRegistrados,
+        ingresosTotales,
+        fechaActualizacion: new Date().toISOString()
+      };
+
+      console.log('✅ Estadísticas obtenidas:', estadisticas);
+      return estadisticas;
+      
+    } catch (error) {
+      console.error('❌ Error obteniendo estadísticas:', error);
+      return null;
+    }
+  },
+
+  // Obtener eventos más populares
+  async obtenerEventosPopulares(limite = 5) {
+    try {
+      const { data: eventos, error } = await supabase
+        .from('eventos')
+        .select('id, titulo, registrados, capacidad, categoria, estado')
+        .order('registrados', { ascending: false })
+        .limit(limite);
+      
+      if (error) {
+        console.error('Error obteniendo eventos populares:', error);
+        return [];
+      }
+
+      return eventos.map(evento => ({
+        ...evento,
+        porcentajeOcupacion: Math.round(((evento.registrados || 0) / evento.capacidad) * 100)
+      }));
+      
+    } catch (error) {
+      console.error('❌ Error obteniendo eventos populares:', error);
+      return [];
+    }
+  },
+
+  // Obtener tendencias de registros por día
+  async obtenerTendenciasRegistros(dias = 7) {
+    try {
+      const fechaInicio = new Date();
+      fechaInicio.setDate(fechaInicio.getDate() - dias);
+      
+      const { data: registros, error } = await supabase
+        .from('registro_eventos')
+        .select('created_at')
+        .gte('created_at', fechaInicio.toISOString())
+        .order('created_at', { ascending: true });
+      
+      if (error) {
+        console.error('Error obteniendo tendencias:', error);
+        return [];
+      }
+
+      // Agrupar por día
+      const registrosPorDia = {};
+      registros.forEach(registro => {
+        const fecha = registro.created_at.split('T')[0];
+        registrosPorDia[fecha] = (registrosPorDia[fecha] || 0) + 1;
+      });
+
+      // Convertir a array ordenado
+      const tendencias = Object.entries(registrosPorDia).map(([fecha, cantidad]) => ({
+        fecha,
+        registros: cantidad,
+        fechaFormateada: new Date(fecha).toLocaleDateString('es-DO', {
+          month: 'short',
+          day: 'numeric'
+        })
+      }));
+
+      return tendencias;
+      
+    } catch (error) {
+      console.error('❌ Error obteniendo tendencias:', error);
+      return [];
+    }
+  },
+
+  // Obtener distribución por categorías
+  async obtenerDistribucionCategorias() {
+    try {
+      const { data: eventos, error } = await supabase
+        .from('eventos')
+        .select('categoria, registrados');
+      
+      if (error) {
+        console.error('Error obteniendo distribución:', error);
+        return [];
+      }
+
+      // Agrupar por categoría
+      const categorias = {};
+      eventos.forEach(evento => {
+        const cat = evento.categoria;
+        if (!categorias[cat]) {
+          categorias[cat] = { categoria: cat, eventos: 0, registrados: 0 };
+        }
+        categorias[cat].eventos += 1;
+        categorias[cat].registrados += (evento.registrados || 0);
+      });
+
+      return Object.values(categorias);
+      
+    } catch (error) {
+      console.error('❌ Error obteniendo distribución:', error);
+      return [];
+    }
+  },
+
+  // Obtener actividad reciente
+  async obtenerActividadReciente(limite = 10) {
+    try {
+      const { data: actividad, error } = await supabase
+        .from('registro_eventos')
+        .select(`
+          id,
+          created_at,
+          visitantes!inner(nombre, email),
+          eventos!inner(titulo)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(limite);
+      
+      if (error) {
+        console.error('Error obteniendo actividad:', error);
+        return [];
+      }
+
+      return actividad.map(item => ({
+        id: item.id,
+        fecha: item.created_at,
+        visitante: item.visitantes.nombre,
+        evento: item.eventos.titulo,
+        tipo: 'registro',
+        fechaRelativa: calcularFechaRelativa(item.created_at)
+      }));
+      
+    } catch (error) {
+      console.error('❌ Error obteniendo actividad:', error);
+      return [];
+    }
+  }
+};
+
+// Función auxiliar para calcular fecha relativa
+function calcularFechaRelativa(fecha: string): string {
+  const ahora = new Date();
+  const fechaItem = new Date(fecha);
+  const diffMs = ahora.getTime() - fechaItem.getTime();
+  const diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDias = Math.floor(diffHoras / 24);
+  
+  if (diffHoras < 1) {
+    return 'Hace unos minutos';
+  } else if (diffHoras < 24) {
+    return `Hace ${diffHoras} hora${diffHoras > 1 ? 's' : ''}`;
+  } else if (diffDias < 7) {
+    return `Hace ${diffDias} día${diffDias > 1 ? 's' : ''}`;
+  } else {
+    return fechaItem.toLocaleDateString('es-DO');
+  }
+}
