@@ -866,7 +866,7 @@ const ReportesAdmin: Component = () => {
                     <th style="text-align: left; padding: 12px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Ranking</th>
                     <th style="text-align: left; padding: 12px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Evento</th>
                     <th style="text-align: right; padding: 12px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Registros</th>
-                    <th style="text-align: right; padding: 12px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Ingresos</th>
+                    <th style="text-align: right; padding: 12px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Check-in</th>
                     <th style="text-align: center; padding: 12px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Tendencia</th>
                     <th style="text-align: center; padding: 12px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Acciones</th>
                   </tr>
