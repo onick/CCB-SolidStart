@@ -2,6 +2,7 @@ import { Component, createSignal, onMount, Show, For, onCleanup } from 'solid-js
 import '../../styles/admin.css';
 import * as echarts from 'echarts';
 import AdminLayout from '../../components/AdminLayout';
+import { estadisticasService } from '../../lib/supabase/services';
 
 // Solid Icons
 import {
@@ -33,6 +34,7 @@ import { FaRegularCalendar } from 'solid-icons/fa';
 const ReportesAdmin: Component = () => {
   
   const [cargando, setCargando] = createSignal(false);
+  const [cargandoTopEventos, setCargandoTopEventos] = createSignal(false);
   const [periodoSeleccionado, setPeriodoSeleccionado] = createSignal('24h');
   const [rangoFechas, setRangoFechas] = createSignal({
     inicio: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -78,13 +80,7 @@ const ReportesAdmin: Component = () => {
     { hora: '24:00', valor: 0.15 }
   ]);
 
-  const [topEventos, setTopEventos] = createSignal([
-    { id: 1, evento: 'Concierto de Jazz', registros: 245, ingresos: 73500, variacion: 12.5 },
-    { id: 2, evento: 'Exposición de Arte', registros: 189, ingresos: 45360, variacion: 8.3 },
-    { id: 3, evento: 'Taller de Fotografía', registros: 156, ingresos: 31200, variacion: -3.2 },
-    { id: 4, evento: 'Noche de Poesía', registros: 134, ingresos: 26800, variacion: 15.7 },
-    { id: 5, evento: 'Festival Gastronómico', registros: 98, ingresos: 29400, variacion: 5.1 }
-  ]);
+  const [topEventos, setTopEventos] = createSignal([]);
 
   // ECharts referencias para 4 gráficos principales
   let chartEventosDistribucion: echarts.ECharts | null = null;
@@ -94,6 +90,7 @@ const ReportesAdmin: Component = () => {
 
   onMount(() => {
     cargarDatos();
+    cargarTopEventos(); // ✅ Cargar datos reales de top eventos
     setTimeout(() => {
       inicializarGraficos();
     }, 100);
@@ -582,6 +579,34 @@ const ReportesAdmin: Component = () => {
     }
   };
 
+  // 📊 CARGAR TOP EVENTOS REALES DESDE SUPABASE
+  const cargarTopEventos = async () => {
+    try {
+      setCargandoTopEventos(true);
+      console.log('📊 Cargando top eventos desde Supabase...');
+      
+      const eventosReales = await estadisticasService.obtenerTopEventosReportes(5);
+      
+      if (eventosReales && eventosReales.length > 0) {
+        setTopEventos(eventosReales);
+        console.log('✅ Top eventos cargados:', eventosReales.length);
+      } else {
+        console.log('⚠️ No se encontraron eventos, manteniendo datos mock');
+        // Fallback a datos de ejemplo si no hay datos reales
+        setTopEventos([
+          { id: 1, evento: 'Sin eventos disponibles', registros: 0, checkins: 0, ingresos: 0, variacion: 0 }
+        ]);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error cargando top eventos:', error);
+      // Mantener array vacío en caso de error
+      setTopEventos([]);
+    } finally {
+      setCargandoTopEventos(false);
+    }
+  };
+
   const actualizarMetricas = () => {
     const nuevasMetricas = metricas();
     nuevasMetricas.eventos.total += Math.floor(Math.random() * 3);
@@ -847,8 +872,15 @@ const ReportesAdmin: Component = () => {
           <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
               <div>
-                <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0;">Top 5 Eventos por Performance</h3>
-                <p style="font-size: 14px; color: #6b7280; margin: 4px 0 0 0;">Ranking basado en registros e ingresos</p>
+                <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0; display: flex; align-items: center; gap: 8px;">
+                  Top 5 Eventos por Performance
+                  <Show when={cargandoTopEventos()}>
+                    <span style="font-size: 12px; color: #6b7280; font-weight: 400;">🔄 Actualizando...</span>
+                  </Show>
+                </h3>
+                <p style="font-size: 14px; color: #6b7280; margin: 4px 0 0 0;">
+                  {cargandoTopEventos() ? 'Cargando datos reales desde Supabase...' : 'Ranking basado en registros y check-ins reales'}
+                </p>
               </div>
               <button 
                 class="btn-primary" 
@@ -872,44 +904,72 @@ const ReportesAdmin: Component = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  <For each={topEventos()}>
-                    {(evento, index) => (
-                      <tr style="border-bottom: 1px solid #f3f4f6;">
-                        <td style="padding: 16px 12px;">
-                          <div style={`display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; font-weight: 600; font-size: 14px; color: white; background: ${index() === 0 ? '#f59e0b' : index() === 1 ? '#6b7280' : index() === 2 ? '#cd7c2f' : '#9ca3af'}`}>
-                            {index() + 1}
-                          </div>
-                        </td>
-                        <td style="padding: 16px 12px;">
-                          <div style="font-size: 14px; font-weight: 600; color: #1f2937;">{evento.evento}</div>
-                        </td>
-                        <td style="padding: 16px 12px; text-align: right;">
-                          <span style="font-size: 14px; font-weight: 600; color: #1f2937;">{evento.registros}</span>
-                        </td>
-                        <td style="padding: 16px 12px; text-align: right;">
-                          <span style="font-size: 14px; font-weight: 600; color: #1f2937;">${evento.ingresos.toLocaleString()}</span>
-                        </td>
-                        <td style="padding: 16px 12px; text-align: center;">
-                          <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
-                            {evento.variacion >= 0 ? (
-                              <FaSolidArrowUp size={12} color="#10b981" />
-                            ) : (
-                              <FaSolidArrowDown size={12} color="#ef4444" />
-                            )}
-                            <span style={`font-size: 12px; font-weight: 600; color: ${evento.variacion >= 0 ? '#10b981' : '#ef4444'}`}>
-                              {Math.abs(evento.variacion)}%
-                            </span>
-                          </div>
-                        </td>
-                        <td style="padding: 16px 12px; text-align: center;">
-                          <button style="background: #f3f4f6; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #6b7280; cursor: pointer;">
-                            <FaSolidEye size={12} />
-                            Ver detalles
+                  <Show when={cargandoTopEventos()}>
+                    <tr>
+                      <td colspan="6" style="padding: 32px; text-align: center; color: #6b7280;">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                          🔄 <span>Cargando datos reales desde Supabase...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  </Show>
+                  
+                  <Show when={!cargandoTopEventos() && topEventos().length === 0}>
+                    <tr>
+                      <td colspan="6" style="padding: 32px; text-align: center; color: #6b7280;">
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                          📊 <span>No hay eventos con datos suficientes para mostrar</span>
+                          <button 
+                            onClick={() => cargarTopEventos()} 
+                            style="background: #3b82f6; color: white; padding: 6px 12px; border-radius: 4px; font-size: 12px; margin-top: 8px;"
+                          >
+                            🔄 Recargar datos
                           </button>
-                        </td>
-                      </tr>
-                    )}
-                  </For>
+                        </div>
+                      </td>
+                    </tr>
+                  </Show>
+
+                  <Show when={!cargandoTopEventos() && topEventos().length > 0}>
+                    <For each={topEventos()}>
+                      {(evento, index) => (
+                        <tr style="border-bottom: 1px solid #f3f4f6;">
+                          <td style="padding: 16px 12px;">
+                            <div style={`display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; font-weight: 600; font-size: 14px; color: white; background: ${index() === 0 ? '#f59e0b' : index() === 1 ? '#6b7280' : index() === 2 ? '#cd7c2f' : '#9ca3af'}`}>
+                              {index() + 1}
+                            </div>
+                          </td>
+                          <td style="padding: 16px 12px;">
+                            <div style="font-size: 14px; font-weight: 600; color: #1f2937;">{evento.evento}</div>
+                          </td>
+                          <td style="padding: 16px 12px; text-align: right;">
+                            <span style="font-size: 14px; font-weight: 600; color: #1f2937;">{evento.registros}</span>
+                          </td>
+                          <td style="padding: 16px 12px; text-align: right;">
+                            <span style="font-size: 14px; font-weight: 600; color: #1f2937;">{evento.checkins || 0}</span>
+                          </td>
+                          <td style="padding: 16px 12px; text-align: center;">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
+                              {evento.variacion >= 0 ? (
+                                <FaSolidArrowUp size={12} color="#10b981" />
+                              ) : (
+                                <FaSolidArrowDown size={12} color="#ef4444" />
+                              )}
+                              <span style={`font-size: 12px; font-weight: 600; color: ${evento.variacion >= 0 ? '#10b981' : '#ef4444'}`}>
+                                {Math.abs(evento.variacion).toFixed(1)}%
+                              </span>
+                            </div>
+                          </td>
+                          <td style="padding: 16px 12px; text-align: center;">
+                            <button style="background: #f3f4f6; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #6b7280; cursor: pointer;">
+                              <FaSolidEye size={12} />
+                              Ver detalles
+                            </button>
+                          </td>
+                        </tr>
+                      )}
+                    </For>
+                  </Show>
                 </tbody>
               </table>
             </div>
