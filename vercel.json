@@ -4,6 +4,13 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": null,
+  "git": {
+    "deploymentEnabled": {
+      "feature/dashboard-estadisticas": true,
+      "main": true,
+      "master": true
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
@@ -21,4 +28,4 @@
       ]
     }
   ]
-} 
+}
