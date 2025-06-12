@@ -3,6 +3,7 @@ import { type Evento } from "../lib/supabase/client";
 import { eventosService } from '../lib/supabase/services';
 import '../styles/admin.css';
 import AdminLayout from '../components/AdminLayout';
+import AdminHeader from '../components/AdminHeader';
 
 // solid-icons for better performance and native Solid.js integration
 import {
@@ -19,1761 +20,600 @@ import {
     FaSolidTicket,
     FaSolidTrash,
     FaSolidUsers,
-    FaSolidWandMagicSparkles
+    FaSolidWandMagicSparkles,
+    FaSolidPlus,
+    FaSolidRotate,
+    FaSolidCalendarDays,
+    FaSolidArrowRightFromBracket
 } from 'solid-icons/fa';
 
-// Función para verificar si Supabase está configurado
-const isSupabaseConfigured = () => {
-  const url = import.meta.env.VITE_SUPABASE_URL;
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  return url && key && !url.includes('tu-proyecto') && !key.includes('tu-anon-key');
-};
+// Componente Modal para Nuevo Evento
+interface ModalNuevoEventoProps {
+  onClose: () => void;
+  onEventoCreado: () => void;
+}
 
-// Función global para crear eventos de prueba
-(window as any).crearEventosDePrueba = async () => {
-  console.log('🎭 Creando eventos de prueba...');
-  
-  const eventosEjemplo = [
-    {
-      titulo: "Concierto de Jazz Contemporáneo",
-      descripcion: "Una noche única con los mejores exponentes del jazz contemporáneo dominicano",
-      categoria: "concierto",
-      fecha: "2024-12-20",
-      hora: "20:00",
-      duracion: 3,
-      ubicacion: "Auditorio Principal",
-      capacidad: 300,
-      registrados: 245,
-      precio: 1500,
-      imagen: "",
-      estado: 'activo' as const
-    },
-    {
-      titulo: "Exposición: Arte Digital Dominicano",
-      descripcion: "Muestra colectiva de artistas dominicanos que exploran las nuevas tecnologías",
-      categoria: "exposicion",
-      fecha: "2024-12-15",
-      hora: "18:00",
-      duracion: 4,
-      ubicacion: "Galería Norte",
-      capacidad: 150,
-      registrados: 89,
-      precio: 800,
-      imagen: "",
-      estado: 'activo' as const
-    },
-    {
-      titulo: "Obra de Teatro: El Quijote Caribeño",
-      descripcion: "Adaptación moderna del clásico de Cervantes ambientada en el Caribe dominicano",
-      categoria: "teatro",
-      fecha: "2024-12-22",
-      hora: "19:30",
-      duracion: 2.5,
-      ubicacion: "Teatro Principal",
-      capacidad: 200,
-      registrados: 156,
-      precio: 1200,
-      imagen: "",
-      estado: 'activo' as const
-    },
-    {
-      titulo: "Taller de Cerámica Taína",
-      descripcion: "Aprende las técnicas ancestrales de cerámica de nuestros pueblos originarios",
-      categoria: "taller",
-      fecha: "2024-12-18",
-      hora: "14:00",
-      duracion: 3,
-      ubicacion: "Aula de Arte",
-      capacidad: 25,
-      registrados: 23,
-      precio: 500,
-      imagen: "",
-      estado: 'activo' as const
-    },
-    {
-      titulo: "Festival de Danza Folklórica",
-      descripcion: "Celebración de las tradiciones dancísticas dominicanas con grupos de todo el país",
-      categoria: "concierto",
-      fecha: "2024-12-28",
-      hora: "17:00",
-      duracion: 4,
-      ubicacion: "Plaza Central",
-      capacidad: 500,
-      registrados: 234,
-      precio: 0,
-      imagen: "",
-      estado: 'activo' as const
-    }
-  ];
+const ModalNuevoEvento: Component<ModalNuevoEventoProps> = (props) => {
+  const [formData, setFormData] = createSignal({
+    titulo: '',
+    descripcion: '',
+    fecha: '',
+    hora: '',
+    duracion: 2,
+    ubicacion: '',
+    capacidad: 100,
+    precio: 0,
+    categoria: 'Concierto',
+    imagen: ''
+  });
+  const [guardando, setGuardando] = createSignal(false);
+  const [error, setError] = createSignal('');
 
-  try {
-    for (const evento of eventosEjemplo) {
-      const resultado = await eventosService.crear(evento);
-      if (resultado) {
-        console.log(`✅ Evento creado: ${evento.titulo}`);
-      } else {
-        console.log(`❌ Error creando: ${evento.titulo}`);
+  const categorias = ['Concierto', 'Teatro', 'Exposición', 'Taller', 'Conferencia', 'Danza', 'Literatura', 'Cine'];
+
+  const handleSubmit = async (e: Event) => {
+    e.preventDefault();
+    setError('');
+    setGuardando(true);
+
+    try {
+      const datos = formData();
+      
+      // Validaciones
+      if (!datos.titulo.trim()) {
+        throw new Error('El título es obligatorio');
       }
+      if (!datos.descripcion.trim()) {
+        throw new Error('La descripción es obligatoria');
+      }
+      if (!datos.fecha) {
+        throw new Error('La fecha es obligatoria');
+      }
+      if (!datos.hora) {
+        throw new Error('La hora es obligatoria');
+      }
+      if (!datos.ubicacion.trim()) {
+        throw new Error('La ubicación es obligatoria');
+      }
+
+      // Crear evento con imagen por defecto si no se proporciona
+      const nuevoEvento = {
+        ...datos,
+        registrados: 0,
+        estado: 'activo',
+        imagen: datos.imagen || `https://via.placeholder.com/400x200/3B82F6/FFFFFF?text=${encodeURIComponent(datos.titulo)}`
+      };
+
+      await eventosService.crear(nuevoEvento);
+      
+      console.log('✅ Evento creado exitosamente:', nuevoEvento.titulo);
+      props.onEventoCreado();
+      props.onClose();
+      
+    } catch (error: any) {
+      console.error('❌ Error creando evento:', error);
+      setError(error.message || 'Error al crear el evento');
+    } finally {
+      setGuardando(false);
     }
-    console.log('🎉 ¡Todos los eventos de prueba han sido creados!');
-    console.log('📍 Ve a http://localhost:3001/eventos para verlos en el admin');
-    console.log('📍 Ve a http://localhost:3001/eventos-publicos para verlos en la página pública');
-    
-    // Recargar la página para mostrar los nuevos eventos
-    window.location.reload();
-  } catch (error) {
-    console.error('❌ Error creando eventos de prueba:', error);
-  }
+  };
+
+  const updateFormData = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+      <div style="background: white; border-radius: 12px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+        
+        {/* Header del Modal */}
+        <div style="padding: 24px 24px 16px 24px; border-bottom: 1px solid #f3f4f6;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="font-size: 24px; font-weight: 700; color: #1f2937; margin: 0;">
+              ➕ Crear Nuevo Evento
+            </h2>
+            <button 
+              onClick={props.onClose}
+              style="background: none; border: none; font-size: 24px; color: #6b7280; cursor: pointer; padding: 4px;"
+            >
+              ×
+            </button>
+          </div>
+          <p style="color: #6b7280; margin: 8px 0 0 0; font-size: 14px;">
+            Completa la información del evento que aparecerá en la página pública
+          </p>
+        </div>
+
+        {/* Formulario */}
+        <form onSubmit={handleSubmit} style="padding: 24px;">
+          <div style="display: grid; gap: 20px;">
+            
+            {/* Título */}
+            <div>
+              <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                Título del Evento *
+              </label>
+              <input 
+                type="text"
+                value={formData().titulo}
+                onInput={(e) => updateFormData('titulo', e.currentTarget.value)}
+                placeholder="Ej: Concierto de Jazz Contemporáneo"
+                style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                onfocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                onblur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+
+            {/* Descripción */}
+            <div>
+              <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                Descripción *
+              </label>
+              <textarea 
+                value={formData().descripcion}
+                onInput={(e) => updateFormData('descripcion', e.currentTarget.value)}
+                placeholder="Describe el evento en detalle..."
+                rows="3"
+                style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; resize: vertical; transition: border-color 0.2s;"
+                onfocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                onblur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+
+            {/* Fecha y Hora */}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Fecha *
+                </label>
+                <input 
+                  type="date"
+                  value={formData().fecha}
+                  onInput={(e) => updateFormData('fecha', e.currentTarget.value)}
+                  style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                  onfocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                  onblur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+                />
+              </div>
+              <div>
+                <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Hora *
+                </label>
+                <input 
+                  type="time"
+                  value={formData().hora}
+                  onInput={(e) => updateFormData('hora', e.currentTarget.value)}
+                  style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                  onfocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                  onblur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+                />
+              </div>
+            </div>
+
+            {/* Categoría y Duración */}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Categoría
+                </label>
+                <select 
+                  value={formData().categoria}
+                  onChange={(e) => updateFormData('categoria', e.currentTarget.value)}
+                  style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; background: white; transition: border-color 0.2s;"
+                  onfocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                  onblur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+                >
+                  <For each={categorias}>
+                    {(categoria) => <option value={categoria}>{categoria}</option>}
+                  </For>
+                </select>
+              </div>
+              <div>
+                <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Duración (horas)
+                </label>
+                <input 
+                  type="number"
+                  value={formData().duracion}
+                  onInput={(e) => updateFormData('duracion', parseInt(e.currentTarget.value) || 0)}
+                  min="1"
+                  max="12"
+                  style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                  onfocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                  onblur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+                />
+              </div>
+            </div>
+
+            {/* Ubicación */}
+            <div>
+              <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                Ubicación *
+              </label>
+              <input 
+                type="text"
+                value={formData().ubicacion}
+                onInput={(e) => updateFormData('ubicacion', e.currentTarget.value)}
+                placeholder="Ej: Auditorio Principal, Sala Norte..."
+                style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                onfocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                onblur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+
+            {/* Capacidad y Precio */}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Capacidad (personas)
+                </label>
+                <input 
+                  type="number"
+                  value={formData().capacidad}
+                  onInput={(e) => updateFormData('capacidad', parseInt(e.currentTarget.value) || 0)}
+                  min="1"
+                  style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                  onfocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                  onblur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+                />
+              </div>
+              <div>
+                <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Precio (RD$)
+                </label>
+                <input 
+                  type="number"
+                  value={formData().precio}
+                  onInput={(e) => updateFormData('precio', parseInt(e.currentTarget.value) || 0)}
+                  min="0"
+                  placeholder="0 = Entrada libre"
+                  style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                  onfocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                  onblur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+                />
+              </div>
+            </div>
+
+            {/* URL de Imagen (opcional) */}
+            <div>
+              <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                URL de Imagen (opcional)
+              </label>
+              <input 
+                type="url"
+                value={formData().imagen}
+                onInput={(e) => updateFormData('imagen', e.currentTarget.value)}
+                placeholder="https://ejemplo.com/imagen.jpg"
+                style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                onfocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                onblur={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+              />
+              <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 0;">
+                Si no proporcionas una imagen, se generará una automáticamente
+              </p>
+            </div>
+
+          </div>
+
+          {/* Mensaje de Error */}
+          <Show when={error()}>
+            <div style="margin-top: 16px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #dc2626; font-size: 14px;">
+              ❌ {error()}
+            </div>
+          </Show>
+
+          {/* Botones */}
+          <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; padding-top: 20px; border-top: 1px solid #f3f4f6;">
+            <button 
+              type="button"
+              onClick={props.onClose}
+              disabled={guardando()}
+              style="padding: 12px 24px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit"
+              disabled={guardando()}
+              style={`padding: 12px 24px; border: none; background: ${guardando() ? '#9ca3af' : '#3b82f6'}; color: white; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: ${guardando() ? 'not-allowed' : 'pointer'}; transition: all 0.2s; display: flex; align-items: center; gap: 8px;`}
+            >
+              <Show when={guardando()}>
+                <FaSolidSpinner size={14} class="animate-spin" />
+              </Show>
+              {guardando() ? 'Creando...' : 'Crear Evento'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 };
 
 const Eventos: Component = () => {
-  const [isAuthenticated, setIsAuthenticated] = createSignal(false);
-  const [eventos, setEventos] = createSignal([]);
-  const [isLoading, setIsLoading] = createSignal(true);
-  const [searchTerm, setSearchTerm] = createSignal('');
-  const [filterCategory, setFilterCategory] = createSignal('todas');
-  const [filterStatus, setFilterStatus] = createSignal('todos');
-  const [showCreateModal, setShowCreateModal] = createSignal(false);
-  const [isCreating, setIsCreating] = createSignal(false);
-  const [isEditing, setIsEditing] = createSignal(false);
-  const [isDeleting, setIsDeleting] = createSignal<string | null>(null);
+  const [eventos, setEventos] = createSignal<Evento[]>([]);
+  const [cargando, setCargando] = createSignal(false);
+  const [mostrarModal, setMostrarModal] = createSignal(false);
 
-  // Nuevo evento para el formulario
-  const [newEvent, setNewEvent] = createSignal<Partial<Evento>>({
-    titulo: "",
-    descripcion: "",
-    fecha: "",
-    hora: "",
-    duracion: 60,
-    ubicacion: "",
-    categoria: "concierto",
-    capacidad: 50,
-    estado: "activo"
-  });
-
-  // Signal para controlar visibilidad del modal
-  const [showModal, setShowModal] = createSignal(false);
-
-  // Signals para modales de edición y participantes
-  const [showEditModal, setShowEditModal] = createSignal(false);
-  const [showParticipantsModal, setShowParticipantsModal] = createSignal(false);
-  const [currentEvent, setCurrentEvent] = createSignal<Evento | null>(null);
-
-  // Verificar autenticación
   onMount(() => {
-    console.log('Eventos: Verificando autenticación...');
-    const authStatus = localStorage.getItem('admin_authenticated');
-    console.log('Estado de autenticación:', authStatus);
-    
-    // Modo de test - bypass automático (SOLO para development)
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('test') === 'true') {
-      console.log('🧪 Modo de test activado - bypass de login');
-      setIsAuthenticated(true);
-      localStorage.setItem('admin_authenticated', 'true');
-      cargarEventos();
-      return;
-    }
-    
-    if (authStatus === 'true') {
-      setIsAuthenticated(true);
-      cargarEventos();
-    }
+    cargarEventos();
   });
 
   const cargarEventos = async () => {
-    console.log('📅 Cargando eventos...');
-    setIsLoading(true);
-    
+    setCargando(true);
     try {
-      const eventosData = await eventosService.obtenerTodos();
-      setEventos(eventosData);
-      console.log('📅 Eventos cargados:', eventosData);
+      const eventosObtenidos = await eventosService.obtenerTodos();
+      setEventos(eventosObtenidos);
     } catch (error) {
-      console.error('❌ Error cargando eventos:', error);
+      console.error('Error cargando eventos:', error);
     } finally {
-      setIsLoading(false);
+      setCargando(false);
     }
-  };
-
-  const handleCreateEvent = async (e: Event) => {
-    e.preventDefault();
-    setIsCreating(true);
-    
-    try {
-      const eventData = {
-        ...newEvent(),
-        registrados: 0,
-        precio: 0
-      };
-      
-      console.log('🎭 Creando nuevo evento:', eventData);
-      await eventosService.crear(eventData);
-      
-      // Recargar eventos
-      await cargarEventos();
-      
-      // Resetear formulario y cerrar modal
-      setNewEvent({
-        titulo: '',
-        descripcion: '',
-        fecha: '',
-        hora: '',
-        duracion: 60,
-        ubicacion: '',
-        categoria: 'concierto',
-        capacidad: 100,
-        estado: 'activo',
-        imagen: ''
-      });
-      setShowCreateModal(false);
-      
-      console.log('✅ Evento creado exitosamente');
-      alert('✅ ¡Evento creado exitosamente!\n\n📋 El evento aparecerá automáticamente en la página pública:\n🔗 http://localhost:3002/eventos-publicos\n\n💡 Los eventos con estado "activo" son visibles al público.');
-    } catch (error) {
-      console.error('❌ Error creando evento:', error);
-      alert('Error al crear el evento. Por favor intenta de nuevo.');
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  const handleInputChange = (field: string, value: string | number) => {
-    setNewEvent(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Función para resetear el formulario
-  const resetForm = () => {
-    setNewEvent({
-      titulo: "",
-      descripcion: "",
-      fecha: "",
-      hora: "",
-      duracion: 60,
-      ubicacion: "",
-      categoria: "concierto",
-      capacidad: 50,
-      estado: "activo",
-      publico: "todos"
-    });
   };
 
   const crearEventosDePrueba = async () => {
     console.log('🎭 Creando eventos de prueba...');
+    setCargando(true);
     
-    const eventosEjemplo = [
-      {
-        titulo: "Concierto de Jazz Contemporáneo",
-        descripcion: "Una noche única con los mejores exponentes del jazz contemporáneo dominicano",
-        categoria: "concierto",
-        fecha: "2024-12-20",
-        hora: "20:00",
-        duracion: 3,
-        ubicacion: "Auditorio Principal",
-        capacidad: 300,
-        registrados: 245,
-        precio: 1500,
-        imagen: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=500&h=300&fit=crop",
-        estado: 'activo' as const
-      },
-      {
-        titulo: "Exposición: Arte Digital Dominicano",
-        descripcion: "Muestra colectiva de artistas dominicanos que exploran las nuevas tecnologías",
-        categoria: "exposicion",
-        fecha: "2024-12-15",
-        hora: "18:00",
-        duracion: 4,
-        ubicacion: "Galería Norte",
-        capacidad: 150,
-        registrados: 89,
-        precio: 800,
-        imagen: "https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=500&h=300&fit=crop",
-        estado: 'activo' as const
-      },
-      {
-        titulo: "Obra de Teatro: El Quijote Caribeño",
-        descripcion: "Adaptación moderna del clásico de Cervantes ambientada en el Caribe dominicano",
-        categoria: "teatro",
-        fecha: "2024-12-22",
-        hora: "19:30",
-        duracion: 2.5,
-        ubicacion: "Teatro Principal",
-        capacidad: 200,
-        registrados: 156,
-        precio: 1200,
-        imagen: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&h=300&fit=crop",
-        estado: 'activo' as const
-      },
-      {
-        titulo: "Taller de Cerámica Taína",
-        descripcion: "Aprende las técnicas ancestrales de cerámica de nuestros pueblos originarios",
-        categoria: "taller",
-        fecha: "2024-12-18",
-        hora: "14:00",
-        duracion: 3,
-        ubicacion: "Aula de Arte",
-        capacidad: 25,
-        registrados: 23,
-        precio: 500,
-        imagen: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500&h=300&fit=crop",
-        estado: 'activo' as const
-      },
-      {
-        titulo: "Festival de Danza Folklórica",
-        descripcion: "Celebración de las tradiciones dancísticas dominicanas con grupos de todo el país",
-        categoria: "concierto",
-        fecha: "2024-12-28",
-        hora: "17:00",
-        duracion: 4,
-        ubicacion: "Plaza Central",
-        capacidad: 500,
-        registrados: 234,
-        precio: 0,
-        imagen: "",
-        estado: 'activo' as const
-      }
-    ];
-
     try {
-      for (const evento of eventosEjemplo) {
-        const resultado = await eventosService.crear(evento);
-        if (resultado) {
-          console.log(`✅ Evento creado: ${evento.titulo}`);
-        } else {
-          console.log(`❌ Error creando: ${evento.titulo}`);
+      // Crear algunos eventos de prueba
+      const eventosPrueba = [
+        {
+          titulo: "Concierto de Jazz",
+          descripcion: "Una noche mágica con los mejores exponentes del jazz",
+          categoria: "Música",
+          fecha: "2025-07-15",
+          hora: "20:00",
+          duracion: 120,
+          ubicacion: "Sala Principal",
+          capacidad: 200,
+          precio: 1500,
+          estado: "activo"
+        },
+        {
+          titulo: "Exposición de Arte Contemporáneo",
+          descripcion: "Muestra de artistas dominicanos emergentes",
+          categoria: "Arte",
+          fecha: "2025-07-20",
+          hora: "10:00",
+          duracion: 480,
+          ubicacion: "Galería Norte",
+          capacidad: 150,
+          precio: 0,
+          estado: "proximo"
         }
+      ];
+
+      for (const evento of eventosPrueba) {
+        await eventosService.crear(evento);
       }
-      console.log('🎉 ¡Todos los eventos de prueba han sido creados!');
-      alert('✅ ¡Eventos de prueba creados exitosamente!\n\n📋 Los eventos aparecerán automáticamente en la página pública:\n🔗 http://localhost:3002/eventos-publicos\n\n💡 Revisa la consola para más detalles.\n🔄 La página pública se actualiza automáticamente cada 30 segundos.');
-      
+
       // Recargar eventos
       await cargarEventos();
+      console.log('✅ Eventos de prueba creados exitosamente');
+      
     } catch (error) {
       console.error('❌ Error creando eventos de prueba:', error);
-      alert('❌ Error creando eventos de prueba. Revisa la consola para más detalles.');
+    } finally {
+      setCargando(false);
     }
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('admin_authenticated');
-    window.location.href = '/admin';
+    console.log('Cerrando sesión...');
+    // Lógica de logout
   };
-
-  const filteredEventos = () => {
-    return eventos().filter(evento => {
-      const matchesSearch = evento.titulo.toLowerCase().includes(searchTerm().toLowerCase()) ||
-                           evento.descripcion.toLowerCase().includes(searchTerm().toLowerCase());
-      const matchesCategory = filterCategory() === 'todas' || evento.categoria === filterCategory();
-      const matchesStatus = filterStatus() === 'todos' || evento.estado === filterStatus();
-      
-      return matchesSearch && matchesCategory && matchesStatus;
-    });
-  };
-
-  const getStatusColor = (estado: string) => {
-    switch (estado) {
-      case 'activo': return '#10B981';
-      case 'borrador': return '#F59E0B';
-      case 'cancelado': return '#EF4444';
-      case 'finalizado': return '#6B7280';
-      default: return '#6B7280';
-    }
-  };
-
-  const formatDate = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  // Función para editar un evento
-  const handleEditEvent = (evento: Evento) => {
-    console.log('Editando evento:', evento);
-    setCurrentEvent(evento);
-    setNewEvent({
-      titulo: evento.titulo,
-      descripcion: evento.descripcion,
-      fecha: evento.fecha,
-      hora: evento.hora,
-      duracion: evento.duracion,
-      ubicacion: evento.ubicacion,
-      categoria: evento.categoria,
-      capacidad: evento.capacidad,
-      estado: evento.estado,
-      publico: evento.publico || 'todos'
-    });
-    setShowEditModal(true);
-  };
-
-  // Función para ver participantes
-  const handleViewParticipants = (evento: Evento) => {
-    console.log('Viendo participantes del evento:', evento);
-    setCurrentEvent(evento);
-    setShowParticipantsModal(true);
-  };
-
-  // Función para eliminar un evento
-  const handleDeleteEvent = async (evento: Evento) => {
-    if (!confirm(`¿Estás seguro de que deseas eliminar el evento "${evento.titulo}"?`)) {
-      return;
-    }
-
-    try {
-      setIsDeleting(evento.id || null);
-      await eventosService.eliminar(evento.id!);
-      await cargarEventos(); // Recargar la lista
-      console.log('Evento eliminado exitosamente');
-    } catch (error) {
-      console.error('Error al eliminar evento:', error);
-      alert('Error al eliminar el evento. Por favor, inténtalo de nuevo.');
-    } finally {
-      setIsDeleting(null);
-    }
-  };
-
-  // Función para actualizar un evento
-  const handleUpdateEvent = async (e: Event) => {
-    e.preventDefault();
-    
-    if (!currentEvent()?.id) {
-      console.error('No hay evento actual para actualizar');
-      return;
-    }
-
-    try {
-      setIsEditing(true);
-      
-      const eventoActualizado = {
-        id: currentEvent()!.id!,
-        titulo: newEvent().titulo!,
-        descripcion: newEvent().descripcion!,
-        categoria: newEvent().categoria!,
-        fecha: newEvent().fecha!,
-        hora: newEvent().hora!,
-        duracion: newEvent().duracion!,
-        ubicacion: newEvent().ubicacion!,
-        capacidad: newEvent().capacidad!,
-        estado: newEvent().estado!,
-        registrados: currentEvent()!.registrados || 0,
-        precio: currentEvent()!.precio || 0,
-        imagen: currentEvent()!.imagen || ""
-      } as Evento;
-
-      console.log('Actualizando evento:', eventoActualizado);
-      await eventosService.actualizar(currentEvent()!.id!, eventoActualizado);
-      
-      // Recargar la lista de eventos
-      await cargarEventos();
-      
-      // Cerrar modal y limpiar estado
-      setShowEditModal(false);
-      setCurrentEvent(null);
-      resetForm();
-      
-      console.log('Evento actualizado exitosamente');
-    } catch (error) {
-      console.error('Error al actualizar evento:', error);
-      alert('Error al actualizar el evento. Por favor, verifica los datos e inténtalo de nuevo.');
-    } finally {
-      setIsEditing(false);
-    }
-  };
-
-  // Comentando la restricción de autenticación por ahora
-  // if (!isAuthenticated()) {
-  //   return (
-  //     <div style="display: flex; align-items: center; justify-content: center; height: 100vh; background: #f8fafc;">
-  //       <div style="text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-  //         <h2>Acceso Restringido</h2>
-  //         <p>Debes iniciar sesión para acceder a esta página.</p>
-  //         <a href="/admin" style="background: #3B82F6; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; display: inline-block; margin-top: 1rem;">
-  //           Ir al Login
-  //         </a>
-  //       </div>
-  //     </div>
-  //   );
-  // }
 
   return (
     <AdminLayout currentPage="eventos" onLogout={handleLogout}>
-        <header class="main-header">
-          <div class="header-content">
-            <div class="header-left">
-              <h1 style="margin: 0; color: #1f2937; font-size: 28px; font-weight: 700;">
-                📅 Gestión de Eventos
-              </h1>
-              <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 16px;">
-                Administra los eventos del Centro Cultural Banreservas
-              </p>
-            </div>
-            <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
-              <button 
-                onclick={crearEventosDePrueba}
-                style="
-                  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #5a67d8 100%);
-                  color: white;
-                  padding: 12px 24px;
-                  border: none;
-                  border-radius: 10px;
-                  font-size: 14px;
-                  font-weight: 600;
-                  cursor: pointer;
-                  display: flex;
-                  align-items: center;
-                  gap: 8px;
-                  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
-                  transition: all 0.3s ease;
-                "
-                onMouseOver={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.4)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.3)';
-                }}
-              >
-                <FaSolidWandMagicSparkles size={16} color="white" />
-                <span>🎭 Crear Eventos de Prueba</span>
-              </button>
-              <button 
-                onclick={() => setShowCreateModal(true)}
-                class="create-event-btn"
-                style="
-                  background: linear-gradient(135deg, #e67e22 0%, #f39c12 50%, #d68910 100%);
-                  color: white;
-                  padding: 14px 28px;
-                  border: none;
-                  border-radius: 12px;
-                  font-size: 16px;
-                  font-weight: 600;
-                  cursor: pointer;
-                  display: flex;
-                  align-items: center;
-                  gap: 10px;
-                  box-shadow: 0 8px 25px rgba(230, 126, 34, 0.3);
-                  transition: all 0.3s ease;
-                  position: relative;
-                  overflow: hidden;
-                "
-                onMouseOver={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 12px 35px rgba(230, 126, 34, 0.4)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 8px 25px rgba(230, 126, 34, 0.3)';
-                }}
-              >
-                <svg 
-                  style="width: 20px; height: 20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
-                </svg>
-                <span style="text-shadow: 0 1px 2px rgba(0,0,0,0.1);">✨ Crear Evento</span>
-              </button>
-            </div>
-          </div>
-        </header>
+        <AdminHeader
+          pageTitle="Gestión de Eventos 🎭"
+          pageSubtitle="Administra todos los eventos del Centro Cultural Banreservas"
+          breadcrumbs={[
+            { label: 'Centro Cultural Banreservas' },
+            { label: 'Gestión' },
+            { label: 'Eventos', active: true }
+          ]}
+          buttons={[
+            {
+              label: 'Crear Pruebas',
+              icon: FaSolidWandMagicSparkles,
+              onClick: crearEventosDePrueba,
+              variant: 'secondary' as const
+            },
+            {
+              label: 'Actualizar',
+              icon: FaSolidRotate,
+              onClick: () => cargarEventos()
+            },
+            {
+              label: 'Nuevo Evento',
+              icon: FaSolidPlus,
+              onClick: () => setMostrarModal(true),
+              variant: 'primary' as const
+            },
+            {
+              label: 'Cerrar Sesión',
+              icon: FaSolidArrowRightFromBracket,
+              onClick: handleLogout,
+              variant: 'logout' as const
+            }
+          ]}
+          titleIcon={FaSolidCalendarDays}
+        />
 
-        {/* Banner informativo para datos mock */}
-        {!import.meta.env.VITE_SUPABASE_URL?.includes('supabase.co') && (
-          <div style="background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #92400e; padding: 16px; margin: 20px; border-radius: 12px; border: 1px solid #fcd34d; box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <div style="font-size: 24px;">🧪</div>
-              <div style="flex: 1;">
-                <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">
-                  Modo de Prueba Activado - Persistencia en localStorage
-                </div>
-                <div style="font-size: 14px; opacity: 0.9;">
-                  Los eventos se guardan en el navegador para que no se pierdan al recargar.
-                  Para persistencia real en base de datos, ve a{' '}
-                  <a href="/setup-supabase" style="color: #92400e; text-decoration: underline; font-weight: 600;">
-                    /setup-supabase
-                  </a>
-                </div>
-              </div>
-              <button 
-                onclick={() => {
-                  if (confirm('¿Estás seguro de que quieres eliminar todos los eventos guardados?')) {
-                    localStorage.removeItem('ccb_eventos_mock');
-                    window.location.reload();
-                  }
-                }}
-                style="background: rgba(146, 64, 14, 0.1); color: #92400e; border: 1px solid rgba(146, 64, 14, 0.3); padding: 8px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;"
-              >
-                🗑️ Limpiar Eventos
-              </button>
+        <div class="main-content" style="background: #f8fafc; padding: 24px;">
+          
+          <Show when={cargando()}>
+            <div style="text-align: center; padding: 2rem; color: #6b7280;">
+              🔄 Cargando eventos desde Supabase...
             </div>
-          </div>
-        )}
+          </Show>
 
-        <div class="main-content">
-          {/* Alerta de datos mock */}
-          {!isSupabaseConfigured() && (
-            <div class="mock-data-alert" style="background: #FEF3C7; border: 1px solid #F59E0B; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
-              <h4 style="margin: 0 0 10px 0; color: #92400E;">🧪 Usando Datos de Prueba</h4>
-              <p style="margin: 0 0 15px 0; color: #92400E;">
-                Supabase no está configurado. Actualmente se muestran eventos mock para demostración.
-              </p>
-              <a 
-                href="/setup-supabase" 
-                style="background: #1E40AF; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; display: inline-block;"
-              >
-                ⚙️ Configurar Supabase
-              </a>
-            </div>
-          )}
-
-          {/* Filtros y búsqueda */}
-          <div class="content-card" style="margin-bottom: 20px;">
-            <div class="card-header">
-              <div>
-                <h2 class="card-title">Filtros y Búsqueda</h2>
-              </div>
-            </div>
-            <div style="padding: 20px;">
-              <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; align-items: end;">
+          {/* Métricas de eventos */}
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 32px;">
+            
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid #3b82f6;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
                 <div>
-                  <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Buscar eventos:</label>
-                  <input
-                    type="text"
-                    placeholder="Buscar por título o descripción..."
-                    value={searchTerm()}
-                    onInput={(e) => setSearchTerm(e.target.value)}
-                    style="width: 100%; padding: 10px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 14px;"
-                  />
+                  <h4 style="font-size: 14px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Eventos Totales</h4>
+                  <div style="font-size: 28px; font-weight: 700; color: #1f2937;">{eventos().length}</div>
+                  <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+                    <FaSolidTicket size={12} color="#3b82f6" />
+                    <span style="font-size: 12px; font-weight: 600; color: #3b82f6;">Programados</span>
+                  </div>
                 </div>
-                <div>
-                  <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Categoría:</label>
-                  <select
-                    value={filterCategory()}
-                    onChange={(e) => setFilterCategory(e.target.value)}
-                    style="width: 100%; padding: 10px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 14px;"
-                  >
-                    <option value="todas">Todas las categorías</option>
-                    <option value="concierto">Conciertos</option>
-                    <option value="teatro">Teatro</option>
-                    <option value="exposicion">Exposiciones</option>
-                    <option value="taller">Talleres</option>
-                    <option value="conferencia">Conferencias</option>
-                  </select>
-                </div>
-                <div>
-                  <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #374151;">Estado:</label>
-                  <select
-                    value={filterStatus()}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    style="width: 100%; padding: 10px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 14px;"
-                  >
-                    <option value="todos">Todos los estados</option>
-                    <option value="activo">Activos</option>
-                    <option value="borrador">Borradores</option>
-                    <option value="cancelado">Cancelados</option>
-                    <option value="finalizado">Finalizados</option>
-                  </select>
+                <div style="background: #eff6ff; padding: 12px; border-radius: 10px;">
+                  <FaSolidCalendarDays size={24} color="#3b82f6" />
                 </div>
               </div>
             </div>
+
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid #10b981;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                  <h4 style="font-size: 14px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Eventos Activos</h4>
+                  <div style="font-size: 28px; font-weight: 700; color: #1f2937;">
+                    {eventos().filter(e => e.estado === 'activo').length}
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+                    <FaSolidUsers size={12} color="#10b981" />
+                    <span style="font-size: 12px; font-weight: 600; color: #10b981;">En curso</span>
+                  </div>
+                </div>
+                <div style="background: #f0fdf4; padding: 12px; border-radius: 10px;">
+                  <FaSolidUsers size={24} color="#10b981" />
+                </div>
+              </div>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid #f59e0b;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                  <h4 style="font-size: 14px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Registrados</h4>
+                  <div style="font-size: 28px; font-weight: 700; color: #1f2937;">
+                    {eventos().reduce((total, evento) => total + (evento.registrados || 0), 0)}
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+                    <FaSolidTicket size={12} color="#f59e0b" />
+                    <span style="font-size: 12px; font-weight: 600; color: #f59e0b;">Asistentes</span>
+                  </div>
+                </div>
+                <div style="background: #fffbeb; padding: 12px; border-radius: 10px;">
+                  <FaSolidTicket size={24} color="#f59e0b" />
+                </div>
+              </div>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid #8b5cf6;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                  <h4 style="font-size: 14px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Capacidad</h4>
+                  <div style="font-size: 28px; font-weight: 700; color: #1f2937;">
+                    {eventos().reduce((total, evento) => total + (evento.capacidad || 0), 0)}
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+                    <FaSolidUsers size={12} color="#8b5cf6" />
+                    <span style="font-size: 12px; font-weight: 600; color: #8b5cf6;">Total disponible</span>
+                  </div>
+                </div>
+                <div style="background: #faf5ff; padding: 12px; border-radius: 10px;">
+                  <FaSolidUsers size={24} color="#8b5cf6" />
+                </div>
+              </div>
+            </div>
+
           </div>
 
           {/* Lista de eventos */}
-          <div class="content-card">
-            <div class="card-header">
+          <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
               <div>
-                <h2 class="card-title">Lista de Eventos ({filteredEventos().length})</h2>
-                <p class="card-subtitle">Gestiona todos los eventos del centro cultural</p>
+                <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0;">Lista de Eventos ({eventos().length})</h3>
+                <p style="font-size: 14px; color: #6b7280; margin: 4px 0 0 0;">Gestiona todos los eventos del centro cultural</p>
               </div>
-            </div>
-            
-            <Show when={isLoading()}>
-              <div style="padding: 40px; text-align: center; color: #6B7280;">
-                <FaSolidSpinner size={24} color="#6B7280" style={{ animation: 'spin 1s linear infinite', 'margin-bottom': '10px' }} />
-                <p>Cargando eventos...</p>
-              </div>
-            </Show>
-
-            <Show when={!isLoading() && filteredEventos().length === 0}>
-              <div style="padding: 40px; text-align: center; color: #6B7280;">
-                <FaSolidCalendarXmark size={48} color="#6B7280" style={{ 'margin-bottom': '15px', opacity: '0.5' }} />
-                <h3 style="margin: 0 0 10px 0; color: #374151;">No hay eventos</h3>
-                <p style="margin: 0;">No se encontraron eventos que coincidan con los filtros aplicados.</p>
-              </div>
-            </Show>
-
-            <Show when={!isLoading() && filteredEventos().length > 0}>
-              <div style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse;">
-                  <thead>
-                    <tr style="background: #F9FAFB; border-bottom: 1px solid #E5E7EB;">
-                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Evento</th>
-                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Categoría</th>
-                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Fecha</th>
-                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Capacidad</th>
-                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Registrados</th>
-                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Estado</th>
-                      <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <For each={filteredEventos()}>
-                      {(evento) => (
-                        <tr style="border-bottom: 1px solid #E5E7EB; hover:background-color: #F9FAFB;">
-                          <td style="padding: 12px;">
-                            <div>
-                              <div style="font-weight: 500; color: #111827; margin-bottom: 2px;">{evento.titulo}</div>
-                              <div style="font-size: 12px; color: #6B7280; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                {evento.descripcion}
-                              </div>
-                            </div>
-                          </td>
-                          <td style="padding: 12px;">
-                            <span style="background: #E0E7FF; color: #3730A3; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">
-                              {evento.categoria}
-                            </span>
-                          </td>
-                          <td style="padding: 12px; color: #374151;">
-                            {formatDate(evento.fecha)}
-                          </td>
-                          <td style="padding: 12px; color: #374151;">
-                            {evento.capacidad}
-                          </td>
-                          <td style="padding: 12px; color: #374151;">
-                            <div style="display: flex; align-items: center; gap: 5px;">
-                              <span>{evento.registrados}</span>
-                              <div style="width: 60px; height: 4px; background: #E5E7EB; border-radius: 2px; overflow: hidden;">
-                                <div 
-                                  style={`width: ${Math.min((evento.registrados / evento.capacidad) * 100, 100)}%; height: 100%; background: ${(evento.registrados / evento.capacidad) > 0.8 ? '#EF4444' : (evento.registrados / evento.capacidad) > 0.6 ? '#F59E0B' : '#10B981'}; transition: width 0.3s ease;`}
-                                ></div>
-                              </div>
-                            </div>
-                          </td>
-                          <td style="padding: 12px;">
-                            <span style={`background: ${getStatusColor(evento.estado)}20; color: ${getStatusColor(evento.estado)}; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;`}>
-                              {evento.estado}
-                            </span>
-                          </td>
-                          <td style="padding: 12px;">
-                            <div style="display: flex; gap: 8px;">
-                              <button 
-                                style="background: #3B82F6; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;"
-                                onclick={() => handleEditEvent(evento)}
-                                title="Editar evento"
-                              >
-                                <FaSolidPenToSquare size={12} color="white" />
-                              </button>
-                              <button 
-                                style="background: #10B981; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;"
-                                onclick={() => handleViewParticipants(evento)}
-                                title="Ver participantes"
-                              >
-                                <FaSolidUsers size={12} color="white" />
-                              </button>
-                              <button 
-                                style="background: #EF4444; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;"
-                                onclick={() => handleDeleteEvent(evento)}
-                                title="Eliminar evento"
-                              >
-                                <FaSolidTrash size={12} color="white" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </For>
-                  </tbody>
-                </table>
-              </div>
-            </Show>
-          </div>
-        </div>
-
-      {/* Modal Crear Evento - Diseño Profesional y Minimalista */}
-      <Show when={showCreateModal()}>
-        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;">
-          <div style="background: white; border-radius: 16px; width: 95%; max-width: 680px; max-height: 95vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05); animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
-            
-            {/* Header Minimalista */}
-            <div style="padding: 2rem 2rem 1.5rem 2rem; border-bottom: 1px solid #f1f5f9;">
-              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                  <h2 style="font-size: 1.5rem; font-weight: 600; color: #1e293b; margin: 0 0 0.5rem 0; letter-spacing: -0.025em;">Crear Nuevo Evento</h2>
-                  <p style="color: #64748b; font-size: 0.875rem; margin: 0;">Complete los campos para crear un evento profesional</p>
-                </div>
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  style="background: #f8fafc; border: none; width: 40px; height: 40px; border-radius: 10px; color: #64748b; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; font-size: 18px;"
-                  onMouseOver={(e) => {
-                    e.target.style.background = '#e2e8f0';
-                    e.target.style.color = '#475569';
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.background = '#f8fafc';
-                    e.target.style.color = '#64748b';
-                  }}
-                >
-                  ×
-                </button>
-              </div>
+              <button 
+                onClick={() => setMostrarModal(true)}
+                style="background: #3b82f6; color: white; padding: 8px 16px; border-radius: 6px; font-size: 14px; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;"
+              >
+                <FaSolidPlus size={14} />
+                Nuevo Evento
+              </button>
             </div>
 
-            {/* Formulario con Diseño Moderno */}
-            <form onSubmit={handleCreateEvent} style="padding: 2rem; padding-top: 1.5rem;">
-              
-              {/* Sección Principal */}
-              <div style="margin-bottom: 2rem;">
-                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Título del Evento
-                    </label>
-                    <input
-                      type="text"
-                      value={newEvent().titulo}
-                      onInput={(e) => handleInputChange('titulo', e.currentTarget.value)}
-                      required
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; transition: all 0.2s; box-sizing: border-box; background: #fafafa;"
-                      placeholder="Ingrese el título del evento"
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0ea5e9';
-                        e.target.style.background = '#ffffff';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#d1d5db';
-                        e.target.style.background = '#fafafa';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Categoría
-                    </label>
-                    <select
-                      value={newEvent().categoria}
-                      onChange={(e) => handleInputChange('categoria', e.currentTarget.value)}
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0ea5e9';
-                        e.target.style.background = '#ffffff';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#d1d5db';
-                        e.target.style.background = '#fafafa';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    >
-                      <option value="concierto">Concierto</option>
-                      <option value="teatro">Teatro</option>
-                      <option value="danza">Danza</option>
-                      <option value="exposicion">Exposición</option>
-                      <option value="taller">Taller</option>
-                      <option value="conferencia">Conferencia</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                  <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                    Público al que va dirigido
-                  </label>
-                  <select
-                    value={newEvent().publico || 'todos'}
-                    onChange={(e) => handleInputChange('publico', e.currentTarget.value)}
-                    style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                    onFocus={(e) => {
-                      e.target.style.borderColor = '#0ea5e9';
-                      e.target.style.background = '#ffffff';
-                      e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = '#d1d5db';
-                      e.target.style.background = '#fafafa';
-                      e.target.style.boxShadow = 'none';
-                    }}
-                  >
-                    <option value="todos">Todos</option>
-                    <option value="familia">Para toda la Familia</option>
-                    <option value="adulto">Adultos</option>
-                    <option value="ninos">Niños</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                    Descripción
-                  </label>
-                  <textarea
-                    value={newEvent().descripcion}
-                    onInput={(e) => handleInputChange('descripcion', e.currentTarget.value)}
-                    required
-                    rows="3"
-                    style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; resize: vertical; font-family: inherit; box-sizing: border-box; background: #fafafa; transition: all 0.2s; line-height: 1.5;"
-                    placeholder="Describa el evento de manera clara y atractiva..."
-                    onFocus={(e) => {
-                      e.target.style.borderColor = '#0ea5e9';
-                      e.target.style.background = '#ffffff';
-                      e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = '#d1d5db';
-                      e.target.style.background = '#fafafa';
-                      e.target.style.boxShadow = 'none';
-                    }}
-                  />
-                </div>
-
-                {/* Campo de Imagen - Mejorado */}
-                <div>
-                  <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.75rem;">
-                    Imagen del Evento
-                  </label>
-                  
-                  {!newEvent().imagen ? (
-                    // Zona de subida de imagen profesional
-                    <div style="position: relative; border: 2px dashed #cbd5e1; border-radius: 12px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding: 1.5rem 1rem; text-align: center; transition: all 0.3s ease; cursor: pointer; group;"
-                         onDragOver={(e) => {
-                           e.preventDefault();
-                           e.currentTarget.style.borderColor = '#0ea5e9';
-                           e.currentTarget.style.background = 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)';
-                           e.currentTarget.style.transform = 'scale(1.02)';
-                         }}
-                         onDragLeave={(e) => {
-                           e.currentTarget.style.borderColor = '#cbd5e1';
-                           e.currentTarget.style.background = 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
-                           e.currentTarget.style.transform = 'scale(1)';
-                         }}
-                         onDrop={(e) => {
-                           e.preventDefault();
-                           const file = e.dataTransfer.files[0];
-                           if (file && file.type.startsWith('image/')) {
-                             const reader = new FileReader();
-                             reader.onload = (event) => {
-                               const result = event.target?.result as string;
-                               handleInputChange('imagen', result);
-                             };
-                             reader.readAsDataURL(file);
-                           }
-                           e.currentTarget.style.borderColor = '#cbd5e1';
-                           e.currentTarget.style.background = 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
-                           e.currentTarget.style.transform = 'scale(1)';
-                         }}
-                         onClick={() => document.getElementById('imageUpload')?.click()}>
-                      
-                      {/* Icono de imagen compacto */}
-                      <div style="width: 48px; height: 48px; margin: 0 auto 0.75rem; background: linear-gradient(135deg, #0ea5e9, #0284c7); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                          <path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 9l2-3 2 3 3-4 3 4H8z"/>
-                          <circle cx="8.5" cy="8.5" r="1.5"/>
-                        </svg>
-                      </div>
-                      
-                      {/* Título principal */}
-                      <h4 style="margin: 0 0 0.25rem; font-size: 1rem; font-weight: 600; color: #1e293b;">
-                        Subir Imagen del Evento
-                      </h4>
-                      
-                      {/* Descripción */}
-                      <p style="margin: 0 0 1rem; color: #64748b; font-size: 0.8rem; line-height: 1.4;">
-                        Arrastra y suelta una imagen aquí o haz clic para seleccionar
-                      </p>
-                      
-                      {/* Botón de acción */}
-                      <div style="display: inline-flex; align-items: center; gap: 0.5rem; background: white; border: 1px solid #e2e8f0; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 0.875rem; font-weight: 500; color: #374151; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer;"
-                           onMouseEnter={(e) => {
-                             e.target.style.background = '#f8fafc';
-                             e.target.style.borderColor = '#0ea5e9';
-                             e.target.style.transform = 'translateY(-1px)';
-                             e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                           }}
-                           onMouseLeave={(e) => {
-                             e.target.style.background = 'white';
-                             e.target.style.borderColor = '#e2e8f0';
-                             e.target.style.transform = 'translateY(0)';
-                             e.target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                           }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                        </svg>
-                        Seleccionar archivo
-                      </div>
-                      
-                      {/* Información técnica */}
-                      <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.1); border-radius: 6px;">
-                        <p style="margin: 0; font-size: 0.7rem; color: #4338ca; font-weight: 500;">
-                          ✨ Formatos: JPG, PNG, WebP • Max: 5MB
-                        </p>
-                      </div>
-                      
-                      {/* Input oculto */}
-                      <input
-                        id="imageUpload"
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onInput={(e) => {
-                          const file = e.currentTarget.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                              const result = event.target?.result as string;
-                              handleInputChange('imagen', result);
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;"
-                      />
-                    </div>
-                  ) : (
-                    // Vista previa profesional cuando hay imagen
-                    <div style="border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                      
-                      {/* Header de la vista previa */}
-                      <div style="padding: 0.75rem; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-bottom: 1px solid #e5e7eb;">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                          <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <div style="width: 28px; height: 28px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                              </svg>
-                            </div>
-                            <div>
-                              <h4 style="margin: 0; font-size: 0.8rem; font-weight: 600; color: #1e293b;">
-                                Imagen cargada correctamente
-                              </h4>
-                              <p style="margin: 0; font-size: 0.7rem; color: #64748b;">
-                                La imagen se mostrará en el evento
-                              </p>
-                            </div>
-                          </div>
-                          
-                          <button
-                            type="button"
-                            onClick={() => handleInputChange('imagen', '')}
-                            style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border: none; padding: 0.5rem; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;"
-                            onMouseEnter={(e) => {
-                              e.target.style.background = 'linear-gradient(135deg, #dc2626, #b91c1c)';
-                              e.target.style.transform = 'scale(1.05)';
-                              e.target.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.4)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.target.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
-                              e.target.style.transform = 'scale(1)';
-                              e.target.style.boxShadow = 'none';
-                            }}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {/* Imagen de vista previa */}
-                      <div style="position: relative; height: 140px; background: #f8fafc;">
-                        <img 
-                          src={newEvent().imagen} 
-                          alt="Vista previa del evento"
-                          style="width: 100%; height: 100%; object-fit: cover; display: block;"
-                        />
-                        
-                        {/* Overlay con información */}
-                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.7)); padding: 1rem 0.75rem 0.75rem; color: white;">
-                          <p style="margin: 0; font-size: 0.8rem; font-weight: 500;">
-                            Vista previa de la imagen del evento
-                          </p>
-                        </div>
-                      </div>
-                      
-                      {/* Footer con acciones */}
-                      <div style="padding: 0.75rem; background: #f8fafc; border-top: 1px solid #e5e7eb;">
-                        <div style="display: flex; justify-content: center;">
-                          <button
-                            type="button"
-                            onClick={() => document.getElementById('imageUpload2')?.click()}
-                            style="display: inline-flex; align-items: center; gap: 0.5rem; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(14, 165, 233, 0.2);"
-                            onMouseEnter={(e) => {
-                              e.target.style.background = 'linear-gradient(135deg, #0284c7, #0369a1)';
-                              e.target.style.transform = 'translateY(-1px)';
-                              e.target.style.boxShadow = '0 4px 12px rgba(14, 165, 233, 0.3)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.target.style.background = 'linear-gradient(135deg, #0ea5e9, #0284c7)';
-                              e.target.style.transform = 'translateY(0)';
-                              e.target.style.boxShadow = '0 2px 4px rgba(14, 165, 233, 0.2)';
-                            }}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                            </svg>
-                            Cambiar imagen
-                          </button>
-                          
-                          <input
-                            id="imageUpload2"
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp"
-                            onInput={(e) => {
-                              const file = e.currentTarget.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onload = (event) => {
-                                  const result = event.target?.result as string;
-                                  handleInputChange('imagen', result);
-                                };
-                                reader.readAsDataURL(file);
-                              }
-                            }}
-                            style="display: none;"
-                          />
-                        </div>
+            <div style="display: grid; gap: 12px;">
+              <For each={eventos()}>
+                {(evento) => (
+                  <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: #f9fafb; border-radius: 8px; border: 1px solid #f3f4f6;">
+                    <div style="flex: 1;">
+                      <div style="font-size: 16px; font-weight: 600; color: #1f2937; margin-bottom: 4px;">{evento.titulo}</div>
+                      <div style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">{evento.descripcion}</div>
+                      <div style="display: flex; gap: 16px; align-items: center;">
+                        <span style="font-size: 12px; color: #6b7280;">📅 {evento.fecha}</span>
+                        <span style="font-size: 12px; color: #6b7280;">🕐 {evento.hora}</span>
+                        <span style="font-size: 12px; color: #6b7280;">📍 {evento.ubicacion}</span>
+                        <span style={`font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: ${
+                          evento.estado === 'activo' ? '#FEF3C7' : '#F3F4F6'
+                        }; color: ${
+                          evento.estado === 'activo' ? '#92400E' : '#6B7280'
+                        }`}>
+                          {evento.estado?.toUpperCase() || 'BORRADOR'}
+                        </span>
                       </div>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Sección Programación */}
-              <div style="margin-bottom: 2rem;">
-                <h3 style="font-size: 1rem; font-weight: 500; color: #374151; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb;">Programación</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem;">
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Fecha
-                    </label>
-                    <input
-                      type="date"
-                      value={newEvent().fecha}
-                      onInput={(e) => handleInputChange('fecha', e.currentTarget.value)}
-                      required
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0ea5e9';
-                        e.target.style.background = '#ffffff';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#d1d5db';
-                        e.target.style.background = '#fafafa';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
+                    
+                    <div style="text-align: right;">
+                      <div style="font-size: 18px; font-weight: 700; color: #1f2937;">{evento.registrados || 0}</div>
+                      <div style="font-size: 12px; color: #6b7280;">de {evento.capacidad} registrados</div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px;">
+                      <button style="background: #3b82f6; color: white; padding: 6px 12px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer;">
+                        <FaSolidGear size={12} />
+                      </button>
+                      <button style="background: #10b981; color: white; padding: 6px 12px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer;">
+                        <FaSolidPenToSquare size={12} />
+                      </button>
+                      <button style="background: #ef4444; color: white; padding: 6px 12px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer;">
+                        <FaSolidTrash size={12} />
+                      </button>
+                    </div>
                   </div>
+                )}
+              </For>
 
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Hora
-                    </label>
-                    <input
-                      type="time"
-                      value={newEvent().hora}
-                      onInput={(e) => handleInputChange('hora', e.currentTarget.value)}
-                      required
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0ea5e9';
-                        e.target.style.background = '#ffffff';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#d1d5db';
-                        e.target.style.background = '#fafafa';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Duración (min)
-                    </label>
-                    <input
-                      type="number"
-                      value={newEvent().duracion}
-                      onInput={(e) => handleInputChange('duracion', parseInt(e.currentTarget.value))}
-                      required
-                      min="15"
-                      max="480"
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      placeholder="120"
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0ea5e9';
-                        e.target.style.background = '#ffffff';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#d1d5db';
-                        e.target.style.background = '#fafafa';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Sección Detalles del Venue */}
-              <div style="margin-bottom: 2rem;">
-                <h3 style="font-size: 1rem; font-weight: 500; color: #374151; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb;">Detalles del Venue</h3>
-                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Ubicación
-                    </label>
-                    <input
-                      type="text"
-                      value={newEvent().ubicacion}
-                      onInput={(e) => handleInputChange('ubicacion', e.currentTarget.value)}
-                      required
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      placeholder="Ej: Auditorio Principal, Sala de Conferencias"
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0ea5e9';
-                        e.target.style.background = '#ffffff';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#d1d5db';
-                        e.target.style.background = '#fafafa';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Capacidad
-                    </label>
-                    <input
-                      type="number"
-                      value={newEvent().capacidad}
-                      onInput={(e) => handleInputChange('capacidad', parseInt(e.currentTarget.value) || 0)}
-                      min="1"
-                      max="10000"
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      placeholder="100"
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0ea5e9';
-                        e.target.style.background = '#ffffff';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#d1d5db';
-                        e.target.style.background = '#fafafa';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Sección Configuración */}
-              <div style="margin-bottom: 2rem;">
-                <h3 style="font-size: 1rem; font-weight: 500; color: #374151; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb;">Configuración</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Capacidad Máxima
-                    </label>
-                    <input
-                      type="number"
-                      value={newEvent().capacidad}
-                      onInput={(e) => handleInputChange('capacidad', parseInt(e.currentTarget.value) || 0)}
-                      min="1"
-                      max="10000"
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      placeholder="100"
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0ea5e9';
-                        e.target.style.background = '#ffffff';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#d1d5db';
-                        e.target.style.background = '#fafafa';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Estado
-                    </label>
-                    <select
-                      value={newEvent().estado}
-                      onChange={(e) => handleInputChange('estado', e.currentTarget.value)}
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0ea5e9';
-                        e.target.style.background = '#ffffff';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = '#d1d5db';
-                        e.target.style.background = '#fafafa';
-                        e.target.style.boxShadow = 'none';
-                      }}
+              <Show when={eventos().length === 0 && !cargando()}>
+                <div style="text-align: center; padding: 40px; color: #6b7280;">
+                  <div style="font-size: 48px; margin-bottom: 16px;">📅</div>
+                  <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0 0 8px 0;">No hay eventos disponibles</h3>
+                  <p style="margin: 0 0 20px 0;">Crea tu primer evento o carga datos de prueba.</p>
+                  <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button 
+                      onClick={() => setMostrarModal(true)}
+                      style="background: #3b82f6; color: white; padding: 12px 24px; border-radius: 6px; font-size: 14px; border: none; cursor: pointer;"
                     >
-                      <option value="activo">Activo</option>
-                      <option value="proximo">Próximo</option>
-                      <option value="completado">Completado</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                    URL de Imagen (Opcional)
-                  </label>
-                  <input
-                    type="url"
-                    value={newEvent().imagen}
-                    onInput={(e) => handleInputChange('imagen', e.currentTarget.value)}
-                    style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                    placeholder="https://ejemplo.com/imagen.jpg"
-                    onFocus={(e) => {
-                      e.target.style.borderColor = '#0ea5e9';
-                      e.target.style.background = '#ffffff';
-                      e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.1)';
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = '#d1d5db';
-                      e.target.style.background = '#fafafa';
-                      e.target.style.boxShadow = 'none';
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Botones de Acción */}
-              <div style="display: flex; justify-content: center; gap: 1rem; padding-top: 2rem; border-top: 1px solid #e5e7eb;">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  style="padding: 0.75rem 1.5rem; background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all 0.2s; min-width: 100px;"
-                  onMouseOver={(e) => {
-                    e.target.style.background = '#f1f5f9';
-                    e.target.style.borderColor = '#cbd5e1';
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.background = '#f8fafc';
-                    e.target.style.borderColor = '#e2e8f0';
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isCreating()}
-                  style={`padding: 0.75rem 1.5rem; background: ${isCreating() ? '#94a3b8' : '#0ea5e9'}; color: white; border: none; border-radius: 8px; font-size: 0.875rem; font-weight: 500; cursor: ${isCreating() ? 'not-allowed' : 'pointer'}; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; min-width: 140px; justify-content: center;`}
-                  onMouseOver={(e) => !isCreating() && (e.target.style.background = '#0284c7')}
-                  onMouseOut={(e) => !isCreating() && (e.target.style.background = '#0ea5e9')}
-                >
-                  {isCreating() ? (
-                    <>
-                      <div style="width: 16px; height: 16px; border: 2px solid #ffffff; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                      Creando...
-                    </>
-                  ) : (
-                    <>
-                      <span>+</span>
                       Crear Evento
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </Show>
-
-      {/* Modal Editar Evento */}
-      <Show when={showEditModal()}>
-        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;">
-          <div style="background: white; border-radius: 16px; width: 95%; max-width: 680px; max-height: 95vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05); animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
-            
-            {/* Header */}
-            <div style="padding: 2rem 2rem 1.5rem 2rem; border-bottom: 1px solid #f1f5f9;">
-              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                  <h2 style="font-size: 1.5rem; font-weight: 600; color: #1e293b; margin: 0 0 0.5rem 0; letter-spacing: -0.025em;">Editar Evento</h2>
-                  <p style="color: #64748b; font-size: 0.875rem; margin: 0;">Modifica los detalles del evento seleccionado</p>
-                </div>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  style="background: #f8fafc; border: none; width: 40px; height: 40px; border-radius: 10px; color: #64748b; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; font-size: 18px;"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            {/* Formulario de edición - usa el mismo formulario que crear pero con handleUpdateEvent */}
-            <form onSubmit={handleUpdateEvent} style="padding: 2rem; padding-top: 1.5rem;">
-              
-              {/* Título y Categoría */}
-              <div style="margin-bottom: 2rem;">
-                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Título del Evento
-                    </label>
-                    <input
-                      type="text"
-                      value={newEvent().titulo}
-                      onInput={(e) => handleInputChange('titulo', e.currentTarget.value)}
-                      required
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; transition: all 0.2s; box-sizing: border-box; background: #fafafa;"
-                      placeholder="Ingrese el título del evento"
-                    />
-                  </div>
-
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Categoría
-                    </label>
-                    <select
-                      value={newEvent().categoria}
-                      onChange={(e) => handleInputChange('categoria', e.currentTarget.value)}
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
+                    </button>
+                    <button 
+                      onClick={crearEventosDePrueba}
+                      style="background: #6b7280; color: white; padding: 12px 24px; border-radius: 6px; font-size: 14px; border: none; cursor: pointer;"
                     >
-                      <option value="concierto">Concierto</option>
-                      <option value="teatro">Teatro</option>
-                      <option value="danza">Danza</option>
-                      <option value="exposicion">Exposición</option>
-                      <option value="taller">Taller</option>
-                      <option value="conferencia">Conferencia</option>
-                    </select>
+                      Cargar Datos de Prueba
+                    </button>
                   </div>
                 </div>
-
-                {/* Descripción */}
-                <div>
-                  <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                    Descripción
-                  </label>
-                  <textarea
-                    value={newEvent().descripcion}
-                    onInput={(e) => handleInputChange('descripcion', e.currentTarget.value)}
-                    required
-                    rows="3"
-                    style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; resize: vertical; font-family: inherit; box-sizing: border-box; background: #fafafa; transition: all 0.2s; line-height: 1.5;"
-                    placeholder="Describa el evento de manera clara y atractiva..."
-                  />
-                </div>
-              </div>
-
-              {/* Fecha, Hora, Duración */}
-              <div style="margin-bottom: 2rem;">
-                <h3 style="font-size: 1rem; font-weight: 500; color: #374151; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb;">Programación</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem;">
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Fecha
-                    </label>
-                    <input
-                      type="date"
-                      value={newEvent().fecha}
-                      onInput={(e) => handleInputChange('fecha', e.currentTarget.value)}
-                      required
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                    />
-                  </div>
-
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Hora
-                    </label>
-                    <input
-                      type="time"
-                      value={newEvent().hora}
-                      onInput={(e) => handleInputChange('hora', e.currentTarget.value)}
-                      required
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                    />
-                  </div>
-
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Duración (min)
-                    </label>
-                    <input
-                      type="number"
-                      value={newEvent().duracion}
-                      onInput={(e) => handleInputChange('duracion', parseInt(e.currentTarget.value))}
-                      required
-                      min="15"
-                      max="480"
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      placeholder="120"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Ubicación y Capacidad */}
-              <div style="margin-bottom: 2rem;">
-                <h3 style="font-size: 1rem; font-weight: 500; color: #374151; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb;">Detalles del Venue</h3>
-                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1.5rem;">
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Ubicación
-                    </label>
-                    <input
-                      type="text"
-                      value={newEvent().ubicacion}
-                      onInput={(e) => handleInputChange('ubicacion', e.currentTarget.value)}
-                      required
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      placeholder="Ej: Auditorio Principal"
-                    />
-                  </div>
-
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Capacidad
-                    </label>
-                    <input
-                      type="number"
-                      value={newEvent().capacidad}
-                      onInput={(e) => handleInputChange('capacidad', parseInt(e.currentTarget.value))}
-                      required
-                      min="1"
-                      max="1000"
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                      placeholder="100"
-                    />
-                  </div>
-
-                  <div>
-                    <label style="display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                      Estado
-                    </label>
-                    <select
-                      value={newEvent().estado}
-                      onChange={(e) => handleInputChange('estado', e.currentTarget.value)}
-                      style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; background: #fafafa; box-sizing: border-box; transition: all 0.2s;"
-                    >
-                      <option value="activo">Activo</option>
-                      <option value="proximo">Próximo</option>
-                      <option value="completado">Completado</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Botones de Acción */}
-              <div style="display: flex; justify-content: center; gap: 1rem; padding-top: 2rem; border-top: 1px solid #e5e7eb;">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  style="padding: 0.75rem 1.5rem; background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all 0.2s; min-width: 100px;"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isEditing()}
-                  style={`padding: 0.75rem 1.5rem; background: ${isEditing() ? '#94a3b8' : '#0ea5e9'}; color: white; border: none; border-radius: 8px; font-size: 0.875rem; font-weight: 500; cursor: ${isEditing() ? 'not-allowed' : 'pointer'}; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; min-width: 140px; justify-content: center;`}
-                >
-                  {isEditing() ? (
-                    <>
-                      <div style="width: 16px; height: 16px; border: 2px solid #ffffff; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                      Actualizando...
-                    </>
-                  ) : (
-                    <>
-                      <FaSolidPenToSquare size={14} color="white" />
-                      Actualizar Evento
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </Show>
-
-      {/* Modal Ver Participantes */}
-      <Show when={showParticipantsModal()}>
-        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;">
-          <div style="background: white; border-radius: 16px; width: 95%; max-width: 800px; max-height: 95vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05); animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
-            
-            {/* Header */}
-            <div style="padding: 2rem 2rem 1.5rem 2rem; border-bottom: 1px solid #f1f5f9;">
-              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                  <h2 style="font-size: 1.5rem; font-weight: 600; color: #1e293b; margin: 0 0 0.5rem 0; letter-spacing: -0.025em;">
-                    Participantes: {currentEvent()?.titulo}
-                  </h2>
-                  <p style="color: #64748b; font-size: 0.875rem; margin: 0;">
-                    {currentEvent()?.registrados || 0} de {currentEvent()?.capacidad || 0} personas registradas
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowParticipantsModal(false)}
-                  style="background: #f8fafc; border: none; width: 40px; height: 40px; border-radius: 10px; color: #64748b; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; font-size: 18px;"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            {/* Contenido */}
-            <div style="padding: 2rem;">
-              <div style="text-align: center; padding: 3rem; color: #64748b;">
-                <FaSolidUsers size={48} color="#cbd5e1" />
-                <h3 style="margin: 1rem 0 0.5rem 0; color: #374151;">Funcionalidad en Desarrollo</h3>
-                <p style="margin: 0;">
-                  La visualización detallada de participantes estará disponible próximamente.<br/>
-                  Por ahora puedes ver el total de registrados en la tabla principal.
-                </p>
-                <div style="margin-top: 2rem; padding: 1rem; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-                  <strong>Información del Evento:</strong><br/>
-                  Capacidad: {currentEvent()?.capacidad || 0} personas<br/>
-                  Registrados: {currentEvent()?.registrados || 0} personas<br/>
-                  Disponibles: {(currentEvent()?.capacidad || 0) - (currentEvent()?.registrados || 0)} cupos
-                </div>
-              </div>
+              </Show>
             </div>
           </div>
+
         </div>
-      </Show>
 
-      <style>
-        {`
-          @keyframes modalSlideIn {
-            from {
-              opacity: 0;
-              transform: translateY(-20px) scale(0.95);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0) scale(1);
-            }
-          }
-          
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-
-          @keyframes shimmer {
-            0% {
-              transform: translateX(-100%);
-            }
-            100% {
-              transform: translateX(100%);
-            }
-          }
-
-          .create-event-btn {
-            position: relative;
-            overflow: hidden;
-          }
-
-          /* Estilos para el campo de imagen */
-          input[type="file"] {
-            position: relative;
-            cursor: pointer;
-            transition: all 0.2s ease;
-          }
-          
-          input[type="file"]:hover {
-            border-color: #0ea5e9 !important;
-            background: #f0f9ff !important;
-          }
-          
-          input[type="file"]:focus {
-            outline: none;
-            border-color: #0ea5e9 !important;
-            background: #ffffff !important;
-            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1) !important;
-          }
-          
-          /* Mejora visual para la vista previa */
-          .image-preview-container {
-            transition: all 0.3s ease;
-          }
-          
-          .image-preview-container:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-          }
-
-          .create-event-btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(
-              90deg,
-              transparent,
-              rgba(255, 255, 255, 0.3),
-              transparent
-            );
-            animation: shimmer 2.5s infinite;
-          }
-
-          .create-event-btn:hover::before {
-            animation: shimmer 1.5s infinite;
-          }
-
-          /* Animaciones para el modal mejorado */
-          @keyframes modalSlideIn {
-            from {
-              opacity: 0;
-              transform: scale(0.95) translateY(-20px);
-            }
-            to {
-              opacity: 1;
-              transform: scale(1) translateY(0);
-            }
-          }
-
-          @keyframes spin {
-            from {
-              transform: rotate(0deg);
-            }
-            to {
-              transform: rotate(360deg);
-            }
-          }
-
-          /* Scrollbar personalizado para el modal */
-          div[style*="overflow-y: auto"]::-webkit-scrollbar {
-            width: 6px;
-          }
-
-          div[style*="overflow-y: auto"]::-webkit-scrollbar-track {
-            background: #f8fafc;
-            border-radius: 3px;
-          }
-
-          div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 3px;
-          }
-
-          div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-          }
-        `}
-      </style>
+        {/* Modal de Nuevo Evento */}
+        <Show when={mostrarModal()}>
+          <ModalNuevoEvento 
+            onClose={() => setMostrarModal(false)}
+            onEventoCreado={cargarEventos}
+          />
+        </Show>
     </AdminLayout>
   );
 };

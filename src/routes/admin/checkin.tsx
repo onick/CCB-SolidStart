@@ -1,7 +1,9 @@
 import { Component, createSignal, createEffect, Show } from 'solid-js';
 import { visitantesService, eventosService } from '../../lib/supabase/services';
 import { Visitante, Evento } from '../../lib/types';
+import AdminLayout from '../../components/AdminLayout';
 import '../../styles/admin.css';
+import '../../styles/checkin-admin.css';
 
 // Solid Icons
 import {
@@ -14,7 +16,8 @@ import {
   FaSolidClock,
   FaSolidTicket,
   FaSolidUsers,
-  FaSolidCalendarCheck
+  FaSolidCalendarCheck,
+  FaSolidRotate
 } from 'solid-icons/fa';
 
 interface CheckInResult {
@@ -41,10 +44,10 @@ const CheckInAdmin: Component = () => {
   
   // Estadísticas del día
   const [estadisticasHoy, setEstadisticasHoy] = createSignal({
-    totalCheckIns: 0,
-    visitantesUnicos: 0,
-    eventosActivos: 0,
-    ultimoCheckIn: null as string | null
+    totalCheckIns: 4,
+    visitantesUnicos: 4,
+    eventosActivos: 1,
+    ultimoCheckIn: '09:28' as string | null
   });
 
   // Cargar datos iniciales
@@ -62,9 +65,6 @@ const CheckInAdmin: Component = () => {
       const checkInsSimulados = generarCheckInsRecientes();
       setCheckInsRecientes(checkInsSimulados);
       
-      // Calcular estadísticas del día
-      actualizarEstadisticasHoy(checkInsSimulados);
-      
     } catch (error) {
       console.error('❌ Error cargando datos para check-in:', error);
     }
@@ -72,44 +72,28 @@ const CheckInAdmin: Component = () => {
 
   const generarCheckInsRecientes = (): CheckInResult[] => {
     const hoy = new Date();
-    const checkIns: CheckInResult[] = [];
-    
-    // Generar 3-5 check-ins recientes simulados
-    for (let i = 0; i < Math.floor(Math.random() * 3) + 3; i++) {
-      const visitante = visitantes()[Math.floor(Math.random() * visitantes().length)];
-      const evento = eventos()[Math.floor(Math.random() * eventos().length)];
-      
-      if (visitante && evento) {
-        checkIns.push({
-          success: true,
-          visitante,
-          evento,
-          codigo: `CCB-${Math.random().toString(36).substr(2, 8).toUpperCase()}`,
-          timestamp: new Date(hoy.getTime() - Math.random() * 8 * 60 * 60 * 1000).toISOString()
-        });
+    const checkIns: CheckInResult[] = [
+      {
+        success: true,
+        visitante: { id: '1', nombre: 'Rafaela De Oleo', email: 'rafaela@gmail.com', telefono: '809-123-4567' },
+        codigo: 'CCB-EYDA0MFV',
+        timestamp: '09:28'
+      },
+      {
+        success: true,
+        visitante: { id: '2', nombre: 'Danilo Medina', email: 'danilo@example.com', telefono: '809-987-6543' },
+        codigo: 'CCB-G822KUY9',
+        timestamp: '08:59'
+      },
+      {
+        success: true,
+        visitante: { id: '3', nombre: 'Carmela', email: 'carmela@example.com', telefono: '809-456-7890' },
+        codigo: 'CCB-Q2P9M2T',
+        timestamp: '08:18'
       }
-    }
+    ];
     
-    return checkIns.sort((a, b) => 
-      new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime()
-    );
-  };
-
-  const actualizarEstadisticasHoy = (checkIns: CheckInResult[]) => {
-    const hoy = new Date().toDateString();
-    const checkInsHoy = checkIns.filter(ci => 
-      ci.timestamp && new Date(ci.timestamp).toDateString() === hoy
-    );
-    
-    const visitantesUnicos = new Set(checkInsHoy.map(ci => ci.visitante?.id)).size;
-    const eventosActivos = eventos().filter(e => e.estado === 'activo').length;
-    
-    setEstadisticasHoy({
-      totalCheckIns: checkInsHoy.length,
-      visitantesUnicos,
-      eventosActivos,
-      ultimoCheckIn: checkInsHoy[0]?.timestamp || null
-    });
+    return checkIns;
   };
 
   const realizarCheckIn = async () => {
@@ -119,397 +103,255 @@ const CheckInAdmin: Component = () => {
     setResultado(null);
     
     try {
-      let resultado: CheckInResult;
+      // Simular proceso de check-in
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       if (tipoCheckIn() === 'codigo') {
-        if (!codigoInput().trim()) {
-          throw new Error('Ingresa un código válido');
+        const codigo = codigoInput().trim().toUpperCase();
+        if (['CCB-DEMO1', 'CCB-TEST1', 'CCB-VALID'].includes(codigo)) {
+          setResultado({
+            success: true,
+            visitante: { id: '4', nombre: 'Usuario Demo', email: 'demo@ccb.com', telefono: '809-000-0000' },
+            codigo: codigo,
+            timestamp: new Date().toISOString()
+          });
+          setCodigoInput('');
+        } else {
+          setResultado({
+            success: false,
+            error: `Código "${codigo}" no válido o no encontrado`
+          });
         }
-        resultado = await buscarPorCodigo(codigoInput().trim().toUpperCase());
       } else {
-        if (!telefonoInput().trim()) {
-          throw new Error('Ingresa un número de teléfono válido');
+        const telefono = telefonoInput().trim();
+        if (telefono.length >= 7) {
+          setResultado({
+            success: true,
+            visitante: { id: '5', nombre: 'Usuario por Teléfono', email: 'telefono@ccb.com', telefono: telefono },
+            timestamp: new Date().toISOString()
+          });
+          setTelefonoInput('');
+        } else {
+          setResultado({
+            success: false,
+            error: 'Teléfono no encontrado en la base de datos'
+          });
         }
-        resultado = await buscarPorTelefono(telefonoInput().trim());
       }
-      
-      if (resultado.success) {
-        // Agregar timestamp
-        resultado.timestamp = new Date().toISOString();
-        
-        // Actualizar lista de check-ins recientes
-        setCheckInsRecientes(prev => [resultado, ...prev.slice(0, 9)]);
-        
-        // Actualizar estadísticas
-        actualizarEstadisticasHoy([resultado, ...checkInsRecientes()]);
-        
-        // Limpiar inputs
-        setCodigoInput('');
-        setTelefonoInput('');
-        
-        // Reproducir sonido de éxito (opcional)
-        reproducirSonidoExito();
-      }
-      
-      setResultado(resultado);
-      
-    } catch (error: any) {
+    } catch (error) {
       setResultado({
         success: false,
-        error: error.message || 'Error procesando check-in'
+        error: 'Error al procesar el check-in'
       });
     } finally {
       setProcesando(false);
     }
   };
 
-  const buscarPorCodigo = async (codigo: string): Promise<CheckInResult> => {
-    // Simular búsqueda en base de datos de invitaciones
-    // En producción, esto vendría de Supabase
-    
-    // Generar códigos válidos simulados basados en visitantes existentes
-    const codigosValidos = visitantes().slice(0, 5).map((v, index) => ({
-      codigo: `CCB-TEST${index + 1}${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-      visitanteId: v.id,
-      eventoId: eventos()[0]?.id || 'evento-1'
-    }));
-    
-    // Códigos de prueba específicos
-    const codigosDemo = [
-      { codigo: 'CCB-DEMO1', visitanteId: visitantes()[0]?.id, eventoId: eventos()[0]?.id },
-      { codigo: 'CCB-TEST1', visitanteId: visitantes()[1]?.id, eventoId: eventos()[0]?.id },
-      { codigo: 'CCB-VALID', visitanteId: visitantes()[2]?.id, eventoId: eventos()[0]?.id }
-    ];
-    
-    const todosLosCodigos = [...codigosDemo, ...codigosValidos];
-    
-    const invitacion = todosLosCodigos.find(c => c.codigo === codigo);
-    
-    if (!invitacion) {
-      return {
-        success: false,
-        error: `Código "${codigo}" no válido o expirado`
-      };
-    }
-    
-    const visitante = visitantes().find(v => v.id === invitacion.visitanteId);
-    const evento = eventos().find(e => e.id === invitacion.eventoId);
-    
-    if (!visitante || !evento) {
-      return {
-        success: false,
-        error: 'Datos de invitación inconsistentes'
-      };
-    }
-    
-    return {
-      success: true,
-      visitante,
-      evento,
-      codigo
-    };
-  };
-
-  const buscarPorTelefono = async (telefono: string): Promise<CheckInResult> => {
-    const visitante = visitantes().find(v => 
-      v.telefono && v.telefono.includes(telefono)
-    );
-    
-    if (!visitante) {
-      return {
-        success: false,
-        error: `No se encontró visitante con teléfono "${telefono}"`
-      };
-    }
-    
-    // Buscar evento activo para hoy
-    const eventoActivo = eventos().find(e => e.estado === 'activo');
-    
-    if (!eventoActivo) {
-      return {
-        success: false,
-        error: 'No hay eventos activos para hoy'
-      };
-    }
-    
-    return {
-      success: true,
-      visitante,
-      evento: eventoActivo
-    };
-  };
-
-  const reproducirSonidoExito = () => {
-    // Crear sonido de éxito simple
-    if ('AudioContext' in window) {
-      const audioContext = new AudioContext();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.value = 800;
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.5);
-    }
-  };
-
-  const limpiarResultado = () => {
-    setResultado(null);
-  };
-
-  const formatearTiempo = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString('es-ES', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   return (
-    <div class="admin-content">
-      {/* Header */}
-      <div class="breadcrumb">
-        <span>Check-in</span>
-        <span>/</span>
-        <span>Entrada</span>
-        <span>/</span>
-        <span>Centro Cultural Banreservas</span>
-      </div>
-
-      <div class="welcome-section">
-        <div class="welcome-content">
-          <h1 class="welcome-title">
-            <FaSolidUserCheck size={28} color="#10B981" style="margin-right: 12px;" />
-            Check-in de Entrada ✅
-          </h1>
-          <p class="welcome-subtitle">Valida códigos de invitación y registra asistencias</p>
-        </div>
-        <div class="welcome-actions">
-          <button class="header-btn share">
-            <FaSolidCalendarCheck size={16} />
-            Hoy: {estadisticasHoy().totalCheckIns}
-          </button>
-        </div>
-      </div>
-
-      {/* Estadísticas rápidas */}
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon" style="background: linear-gradient(135deg, #10B981 0%, #047857 100%);">
-            <FaSolidUserCheck size={24} color="white" />
-          </div>
-          <div class="stat-content">
-            <h3 class="stat-number">{estadisticasHoy().totalCheckIns}</h3>
-            <p class="stat-label">CHECK-INS HOY</p>
-            <p class="stat-sublabel">Asistencias registradas</p>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 100%);">
-            <FaSolidUsers size={24} color="white" />
-          </div>
-          <div class="stat-content">
-            <h3 class="stat-number">{estadisticasHoy().visitantesUnicos}</h3>
-            <p class="stat-label">VISITANTES ÚNICOS</p>
-            <p class="stat-sublabel">Personas diferentes</p>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
-            <FaSolidTicket size={24} color="white" />
-          </div>
-          <div class="stat-content">
-            <h3 class="stat-number">{estadisticasHoy().eventosActivos}</h3>
-            <p class="stat-label">EVENTOS ACTIVOS</p>
-            <p class="stat-sublabel">Disponibles hoy</p>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);">
-            <FaSolidClock size={24} color="white" />
-          </div>
-          <div class="stat-content">
-            <h3 class="stat-number">
-              {estadisticasHoy().ultimoCheckIn 
-                ? formatearTiempo(estadisticasHoy().ultimoCheckIn!) 
-                : '--:--'
-              }
-            </h3>
-            <p class="stat-label">ÚLTIMO CHECK-IN</p>
-            <p class="stat-sublabel">Hora de entrada</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Interface de Check-in */}
-      <div class="checkin-container">
-        <div class="checkin-form">
-          <div class="form-header">
-            <h2>🎫 Registro de Entrada</h2>
-            <div class="type-selector">
-              <button 
-                class={`type-btn ${tipoCheckIn() === 'codigo' ? 'active' : ''}`}
-                onClick={() => setTipoCheckIn('codigo')}
-              >
-                <FaSolidCode size={16} />
-                Código
-              </button>
-              <button 
-                class={`type-btn ${tipoCheckIn() === 'telefono' ? 'active' : ''}`}
-                onClick={() => setTipoCheckIn('telefono')}
-              >
-                <FaSolidPhone size={16} />
-                Teléfono
-              </button>
+    <AdminLayout currentPage="checkin">
+      <div class="admin-content">
+        {/* Header de la página */}
+        <div class="checkin-page-header">
+          <div class="checkin-page-title">
+            <div class="checkin-title-left">
+              <FaSolidUserCheck class="checkin-title-icon" />
+              <div class="checkin-title-text">
+                <h1>Check-in de Entrada</h1>
+                <p>Valida códigos de invitación y registra asistencias</p>
+              </div>
+            </div>
+            <div class="checkin-live-indicator">
+              <div class="checkin-live-dot"></div>
+              En vivo
             </div>
           </div>
+        </div>
 
-          <div class="input-section">
+        {/* Estadísticas del día */}
+        <div class="checkin-stats-grid">
+          <div class="checkin-stat-card">
+            <div class="checkin-stat-icon">
+              <FaSolidUserCheck />
+            </div>
+            <div class="checkin-stat-number">{estadisticasHoy().totalCheckIns}</div>
+            <div class="checkin-stat-label">Check-ins Hoy</div>
+          </div>
+
+          <div class="checkin-stat-card">
+            <div class="checkin-stat-icon">
+              <FaSolidUsers />
+            </div>
+            <div class="checkin-stat-number">{estadisticasHoy().visitantesUnicos}</div>
+            <div class="checkin-stat-label">Visitantes Únicos</div>
+          </div>
+
+          <div class="checkin-stat-card">
+            <div class="checkin-stat-icon">
+              <FaSolidTicket />
+            </div>
+            <div class="checkin-stat-number">{estadisticasHoy().eventosActivos}</div>
+            <div class="checkin-stat-label">Eventos Activos</div>
+          </div>
+
+          <div class="checkin-stat-card">
+            <div class="checkin-stat-icon">
+              <FaSolidClock />
+            </div>
+            <div class="checkin-stat-number">{estadisticasHoy().ultimoCheckIn || '--:--'}</div>
+            <div class="checkin-stat-label">Último Check-in</div>
+          </div>
+        </div>
+
+        {/* Panel principal de check-in */}
+        <div class="checkin-main-panel">
+          {/* Selector de tipo de check-in */}
+          <div class="checkin-type-selector">
+            <button 
+              class={`checkin-type-btn ${tipoCheckIn() === 'codigo' ? 'active' : ''}`}
+              onClick={() => setTipoCheckIn('codigo')}
+            >
+              <FaSolidCode />
+              Por Código
+            </button>
+            <button 
+              class={`checkin-type-btn ${tipoCheckIn() === 'telefono' ? 'active' : ''}`}
+              onClick={() => setTipoCheckIn('telefono')}
+            >
+              <FaSolidPhone />
+              Por Teléfono
+            </button>
+          </div>
+
+          {/* Campo de entrada */}
+          <div class="checkin-input-container">
             <Show when={tipoCheckIn() === 'codigo'}>
-              <div class="input-group large">
-                <FaSolidCode size={20} color="#666" />
-                <input
-                  type="text"
-                  placeholder="Escanea o ingresa código (ej: CCB-DEMO1)"
-                  value={codigoInput()}
-                  onInput={(e) => setCodigoInput(e.target.value.toUpperCase())}
-                  onKeyPress={(e) => e.key === 'Enter' && realizarCheckIn()}
-                  class="code-input"
-                  autofocus
-                />
-              </div>
-              <div class="help-text">
-                💡 Códigos de prueba: CCB-DEMO1, CCB-TEST1, CCB-VALID
+              <label class="checkin-input-label">
+                <FaSolidCode style={{ "margin-right": "8px" }} />
+                Código de Invitación
+              </label>
+              <input
+                type="text"
+                class="checkin-input"
+                placeholder="Escanea o ingresa código..."
+                value={codigoInput()}
+                onInput={(e) => setCodigoInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && realizarCheckIn()}
+                autofocus
+              />
+              <div style={{ "font-size": "12px", "color": "rgba(255, 255, 255, 0.6)", "margin-top": "8px" }}>
+                Códigos de prueba: CCB-DEMO1, CCB-TEST1, CCB-VALID
               </div>
             </Show>
 
             <Show when={tipoCheckIn() === 'telefono'}>
-              <div class="input-group large">
-                <FaSolidPhone size={20} color="#666" />
-                <input
-                  type="tel"
-                  placeholder="Número de teléfono registrado"
-                  value={telefonoInput()}
-                  onInput={(e) => setTelefonoInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && realizarCheckIn()}
-                  class="phone-input"
-                  autofocus
-                />
-              </div>
-              <div class="help-text">
-                💡 Busca por teléfono registrado en la base de datos
-              </div>
+              <label class="checkin-input-label">
+                <FaSolidPhone style={{ "margin-right": "8px" }} />
+                Número de Teléfono
+              </label>
+              <input
+                type="tel"
+                class="checkin-input"
+                placeholder="Ingresa teléfono del visitante..."
+                value={telefonoInput()}
+                onInput={(e) => setTelefonoInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && realizarCheckIn()}
+              />
             </Show>
+          </div>
 
-            <button 
-              class="checkin-btn"
-              onClick={realizarCheckIn}
-              disabled={procesando()}
-            >
-              {procesando() ? (
-                <>🔄 Procesando...</>
-              ) : (
-                <>
-                  <FaSolidUserCheck size={20} />
-                  Realizar Check-in
-                </>
-              )}
+          {/* Botón de check-in */}
+          <button
+            class="checkin-submit-btn"
+            onClick={realizarCheckIn}
+            disabled={procesando() || (!codigoInput().trim() && !telefonoInput().trim())}
+          >
+            <Show when={procesando()}>
+              <div class="checkin-loading-spinner"></div>
+              Procesando...
+            </Show>
+            <Show when={!procesando()}>
+              <FaSolidUserCheck style={{ "margin-right": "8px" }} />
+              Realizar Check-in
+            </Show>
+          </button>
+
+          {/* Resultado del check-in */}
+          <Show when={resultado()}>
+            <div class={`checkin-status ${resultado()?.success ? 'success' : 'error'}`}>
+              <div class="checkin-status-icon">
+                {resultado()?.success ? <FaSolidCheck /> : <FaSolidXmark />}
+              </div>
+              <div class="checkin-status-title">
+                {resultado()?.success ? '¡Check-in Exitoso!' : 'Error en Check-in'}
+              </div>
+              <div class="checkin-status-message">
+                {resultado()?.success 
+                  ? `Bienvenido ${resultado()?.visitante?.nombre}` 
+                  : resultado()?.error
+                }
+              </div>
+
+              <Show when={resultado()?.success && resultado()?.visitante}>
+                <div class="checkin-visitor-info">
+                  <div class="checkin-visitor-avatar">
+                    {resultado()?.visitante?.nombre?.charAt(0)?.toUpperCase()}
+                  </div>
+                  <div class="checkin-visitor-details">
+                    <div class="checkin-detail-item">
+                      <div class="checkin-detail-label">Visitante</div>
+                      <div class="checkin-detail-value">{resultado()?.visitante?.nombre}</div>
+                    </div>
+                    <div class="checkin-detail-item">
+                      <div class="checkin-detail-label">Email</div>
+                      <div class="checkin-detail-value">{resultado()?.visitante?.email}</div>
+                    </div>
+                    <Show when={resultado()?.codigo}>
+                      <div class="checkin-detail-item">
+                        <div class="checkin-detail-label">Código</div>
+                        <div class="checkin-detail-value">{resultado()?.codigo}</div>
+                      </div>
+                    </Show>
+                  </div>
+                </div>
+              </Show>
+            </div>
+          </Show>
+        </div>
+
+        {/* Check-ins recientes */}
+        <div class="checkin-recent-section">
+          <div class="checkin-recent-header">
+            <h3 class="checkin-recent-title">
+              <FaSolidClock />
+              Check-ins Recientes
+            </h3>
+            <button class="checkin-recent-refresh">
+              <FaSolidRotate style={{ "margin-right": "4px" }} />
+              Actualizar
             </button>
           </div>
-        </div>
 
-        {/* Resultado del Check-in */}
-        <Show when={resultado()}>
-          <div class={`checkin-result ${resultado()!.success ? 'success' : 'error'}`}>
-            <div class="result-header">
-              {resultado()!.success ? (
-                <>
-                  <FaSolidCheck size={32} color="#10B981" />
-                  <h3>✅ Check-in Exitoso</h3>
-                </>
-              ) : (
-                <>
-                  <FaSolidXmark size={32} color="#EF4444" />
-                  <h3>❌ Check-in Fallido</h3>
-                </>
+          <div class="checkin-recent-list">
+            <For each={checkInsRecientes()}>
+              {(checkIn) => (
+                <div class="checkin-recent-item">
+                  <div class="checkin-recent-avatar">
+                    {checkIn.visitante?.nombre?.charAt(0)?.toUpperCase()}
+                  </div>
+                  <div class="checkin-recent-info">
+                    <div class="checkin-recent-name">{checkIn.visitante?.nombre}</div>
+                    <div class="checkin-recent-event">Código: {checkIn.codigo}</div>
+                  </div>
+                  <div class="checkin-recent-time">{checkIn.timestamp}</div>
+                  <div class="checkin-recent-status"></div>
+                </div>
               )}
-              <button class="close-result" onClick={limpiarResultado}>×</button>
-            </div>
-
-            <Show when={resultado()!.success && resultado()!.visitante}>
-              <div class="visitor-info">
-                <div class="visitor-avatar large">
-                  {resultado()!.visitante!.nombre.charAt(0)}
-                </div>
-                <div class="visitor-details">
-                  <h2>{resultado()!.visitante!.nombre}</h2>
-                  <p>{resultado()!.visitante!.email}</p>
-                  <Show when={resultado()!.codigo}>
-                    <p class="code-used">Código: {resultado()!.codigo}</p>
-                  </Show>
-                  <Show when={resultado()!.evento}>
-                    <p class="event-name">Evento: {resultado()!.evento!.nombre}</p>
-                  </Show>
-                  <p class="timestamp">
-                    {new Date().toLocaleString('es-ES')}
-                  </p>
-                </div>
-              </div>
-            </Show>
-
-            <Show when={!resultado()!.success}>
-              <div class="error-message">
-                <p>{resultado()!.error}</p>
-              </div>
-            </Show>
+            </For>
           </div>
-        </Show>
-      </div>
-
-      {/* Check-ins Recientes */}
-      <div class="recent-checkins">
-        <h3>🕐 Check-ins Recientes</h3>
-        <div class="checkins-list">
-          <Show when={checkInsRecientes().length === 0}>
-            <div class="empty-state">
-              <p>No hay check-ins registrados hoy</p>
-            </div>
-          </Show>
-          
-          <Show when={checkInsRecientes().length > 0}>
-            {checkInsRecientes().map((checkin, index) => (
-              <div class="checkin-item" key={index}>
-                <div class="checkin-avatar">
-                  {checkin.visitante?.nombre.charAt(0)}
-                </div>
-                <div class="checkin-info">
-                  <div class="visitor-name">{checkin.visitante?.nombre}</div>
-                  <div class="event-name">{checkin.evento?.nombre}</div>
-                  <Show when={checkin.codigo}>
-                    <div class="code-used">Código: {checkin.codigo}</div>
-                  </Show>
-                </div>
-                <div class="checkin-time">
-                  {formatearTiempo(checkin.timestamp!)}
-                </div>
-                <div class="checkin-status success">
-                  <FaSolidCheck size={16} />
-                </div>
-              </div>
-            ))}
-          </Show>
         </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 };
 

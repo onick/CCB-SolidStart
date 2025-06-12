@@ -12,6 +12,11 @@ const EventosPublicos: Component = () => {
   const [selectedEvento, setSelectedEvento] = createSignal<any>(null);
   const [showSyncInfo, setShowSyncInfo] = createSignal(false);
   
+  // Estados para búsqueda
+  const [searchTerm, setSearchTerm] = createSignal('');
+  const [searchCategory, setSearchCategory] = createSignal('todos');
+  const [isSearchVisible, setIsSearchVisible] = createSignal(false);
+  
   // Estados para gestos de swipe
   const [currentEventIndex, setCurrentEventIndex] = createSignal(0);
   const [swipeOffset, setSwipeOffset] = createSignal(0);

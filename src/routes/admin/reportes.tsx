@@ -1,14 +1,16 @@
 import { Component, createSignal, onMount, Show, For, onCleanup } from 'solid-js';
 import '../../styles/admin.css';
+import '../../styles/reportes-admin.css';
 import * as echarts from 'echarts';
 import AdminLayout from '../../components/AdminLayout';
+import AdminHeader from '../../components/AdminHeader';
 import { estadisticasService } from '../../lib/supabase/services';
 
 // Solid Icons
 import {
+  FaSolidChartLine,
   FaSolidFilePdf,
   FaSolidDownload,
-  FaSolidChartLine,
   FaSolidUsers,
   FaSolidTicket,
   FaSolidRotate,
@@ -16,18 +18,18 @@ import {
   FaSolidEye,
   FaSolidFileExport,
   FaSolidClock,
-  FaSolidHouse,
   FaSolidChartBar,
   FaSolidUserCheck,
   FaSolidCode,
   FaSolidShare,
   FaSolidPlus,
-  FaSolidArrowRightFromBracket,
   FaSolidArrowUp,
   FaSolidArrowDown,
   FaSolidCalendarDays,
   FaSolidFilter,
-  FaSolidChartPie
+  FaSolidChartPie,
+  FaSolidDollarSign,
+  FaSolidFire
 } from 'solid-icons/fa';
 import { FaRegularCalendar } from 'solid-icons/fa';
 
@@ -646,91 +648,38 @@ const ReportesAdmin: Component = () => {
 
   return (
     <AdminLayout>
-      <div class="admin-content" style="min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-        
-        {/* Header Moderno y Profesional */}
-        <header class="admin-header" style="background: rgba(0,0,0,0.1); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.2); padding: 24px 32px;">
-          <div class="header-left">
-            <div class="breadcrumb" style="color: rgba(255,255,255,0.8); font-size: 14px; margin-bottom: 8px;">
-              <span>Centro Cultural Banreservas</span> / <span>Analytics</span> / <span>Reportes</span>
-            </div>
-            <h1 class="main-title" style="color: white; display: flex; align-items: center; gap: 12px;">
-              <FaSolidChartLine size={32} />
-              Analytics Dashboard
-            </h1>
-            <p class="main-subtitle" style="color: rgba(255,255,255,0.9);">
-              Monitoreo en tiempo real y análisis de datos del Centro Cultural
-            </p>
-          </div>
-          <div class="header-right">
-            <button class="btn-header" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);" onClick={() => cargarDatos()}>
-              <FaSolidRotate size={16} />
-              Actualizar
-            </button>
-            <button class="btn-header" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);">
-              <FaSolidDownload size={16} />
-              Exportar
-            </button>
-            <button class="btn-header btn-logout" onclick={handleLogout}>
-              <FaSolidArrowRightFromBracket size={16} color="white" />
-              Salir
-            </button>
-          </div>
-        </header>
+      <AdminHeader
+        pageTitle="Analytics Dashboard"
+        pageSubtitle="Monitoreo en tiempo real y análisis de datos del Centro Cultural"
+        breadcrumbs={[
+          { label: 'Centro Cultural Banreservas' },
+          { label: 'Analytics' },
+          { label: 'Reportes', active: true }
+        ]}
+        buttons={[
+          {
+            label: 'Actualizar',
+            icon: FaSolidRotate,
+            onClick: () => cargarDatos()
+          },
+          {
+            label: 'Exportar',
+            icon: FaSolidDownload
+          },
+          {
+            label: 'Salir',
+            icon: FaSolidGear,
+            onClick: handleLogout,
+            variant: 'logout' as const
+          }
+        ]}
+        titleIcon={FaSolidChartLine}
+      />
 
         {/* Content Profesional */}
         <div class="main-content" style="background: #f8fafc; padding: 24px;">
           
-          {/* Filtros y Controles */}
-          <div style="background: white; padding: 20px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-              <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0;">Filtros de Análisis</h3>
-              <div style="display: flex; gap: 12px; align-items: center;">
-                <FaSolidFilter size={16} color="#6b7280" />
-                <span style="font-size: 14px; color: #6b7280;">Período activo</span>
-              </div>
-            </div>
-            
-            <div style="display: flex; gap: 16px; align-items: center;">
-              <div style="display: flex; gap: 8px;">
-                <For each={[
-                  { value: '24h', label: '24 Horas' },
-                  { value: '7d', label: '7 Días' },
-                  { value: '30d', label: '30 Días' },
-                  { value: '90d', label: '90 Días' }
-                ]}>
-                  {(periodo) => (
-                    <button 
-                      class={`btn-filter ${periodoSeleccionado() === periodo.value ? 'active' : ''}`}
-                      onClick={() => setPeriodoSeleccionado(periodo.value)}
-                      style="padding: 8px 16px; border-radius: 6px; font-size: 14px;"
-                    >
-                      {periodo.label}
-                    </button>
-                  )}
-                </For>
-              </div>
-              
-              <div style="border-left: 1px solid #e5e7eb; padding-left: 16px; display: flex; gap: 12px; align-items: center;">
-                <FaSolidCalendarDays size={16} color="#6b7280" />
-                <input 
-                  type="date" 
-                  value={rangoFechas().inicio}
-                  onChange={(e) => setRangoFechas(prev => ({ ...prev, inicio: e.target.value }))}
-                  style="border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 12px; font-size: 14px;"
-                />
-                <span style="color: #6b7280;">hasta</span>
-                <input 
-                  type="date" 
-                  value={rangoFechas().fin}
-                  onChange={(e) => setRangoFechas(prev => ({ ...prev, fin: e.target.value }))}
-                  style="border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 12px; font-size: 14px;"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Métricas Principales Compactas */}
+          {/* Métricas Principales - Estilo Dashboard */}
           <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 32px;">
             
             {/* Métrica 1 - Eventos */}
@@ -819,10 +768,10 @@ const ReportesAdmin: Component = () => {
 
           </div>
 
-          {/* 4 Gráficos Profesionales en Layout 2x2 */}
+          {/* Gráficos Principales - Estilo Dashboard Limpio */}
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px;">
             
-            {/* Gráfico 1 - Distribución de Eventos por Categoría */}
+            {/* Gráfico 1 - Distribución de Eventos */}
             <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
               <div style="margin-bottom: 20px;">
                 <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0;">Distribución por Categoría</h3>
@@ -833,29 +782,7 @@ const ReportesAdmin: Component = () => {
               </div>
             </div>
 
-            {/* Gráfico 2 - Tendencia de Eventos */}
-            <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <div style="margin-bottom: 20px;">
-                <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0;">Tendencia Mensual</h3>
-                <p style="font-size: 14px; color: #6b7280; margin: 4px 0 0 0;">Evolución de eventos en el tiempo</p>
-              </div>
-              <div style="height: 300px;">
-                <div id="chartTendenciaEventos" style="width: 100%; height: 100%;"></div>
-              </div>
-            </div>
-
-            {/* Gráfico 3 - Estado de Registros */}
-            <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <div style="margin-bottom: 20px;">
-                <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0;">Estado de Registros</h3>
-                <p style="font-size: 14px; color: #6b7280; margin: 4px 0 0 0;">Distribución por estado</p>
-              </div>
-              <div style="height: 300px;">
-                <div id="chartRegistrosEstado" style="width: 100%; height: 100%;"></div>
-              </div>
-            </div>
-
-            {/* Gráfico 4 - Actividad en Tiempo Real */}
+            {/* Gráfico 2 - Actividad en Tiempo Real */}
             <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
               <div style="margin-bottom: 20px;">
                 <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0;">Actividad en Tiempo Real</h3>
@@ -976,7 +903,6 @@ const ReportesAdmin: Component = () => {
           </div>
 
         </div>
-      </div>
     </AdminLayout>
   );
 };

@@ -3,6 +3,7 @@ import { eventosService, visitantesService } from '../lib/supabase/services';
 import '../styles/admin.css';
 import { Chart, registerables } from 'chart.js';
 import AdminLayout from '../components/AdminLayout';
+import AdminHeader from '../components/AdminHeader';
 
 // solid-icons for better performance and native Solid.js integration
 import {
@@ -414,39 +415,49 @@ const Admin: Component = () => {
   // Panel de administración principal
   const renderAdminPanel = () => {
     console.log('✅ renderAdminPanel() ejecutada');
+    
+    // Configuración del header para Dashboard
+    const breadcrumbs = [
+      { label: 'Eventos' },
+      { label: 'Dashboard' },
+      { label: 'Centro Cultural Banreservas', active: true }
+    ];
+    
+    const headerButtons = [
+      {
+        label: 'Ver Página Principal',
+        icon: FaSolidShare,
+        onClick: () => window.open('/', '_blank'),
+        variant: 'success' as const,
+        title: 'Ver página principal del sitio'
+      },
+      {
+        label: 'Compartir',
+        icon: FaSolidShare,
+        variant: 'secondary' as const
+      },
+      {
+        label: 'Nuevo Evento',
+        icon: FaSolidPlus,
+        variant: 'primary' as const
+      },
+      {
+        label: 'Cerrar Sesión',
+        icon: FaSolidArrowRightFromBracket,
+        onClick: handleLogout,
+        variant: 'logout' as const
+      }
+    ];
+    
     return (
       <AdminLayout currentPage="dashboard" onLogout={handleLogout}>
-          <header class="main-header">
-            <div class="header-left">
-              <div class="breadcrumb">
-                <span>Eventos</span> / <span>Dashboard</span> / Centro Cultural Banreservas
-              </div>
-              <h1 class="main-title">¡Bienvenido de vuelta, Admin! 👋</h1>
-              <p class="main-subtitle">Gestiona todos los aspectos del Centro Cultural Banreservas</p>
-            </div>
-            <div class="header-right">
-              <button 
-                class="btn-header btn-success"
-                onclick={() => window.open('/', '_blank')}
-                title="Ver página principal del sitio"
-              >
-                <FaSolidShare size={16} color="white" />
-                Ver Página Principal
-              </button>
-              <button class="btn-header btn-secondary">
-                <FaSolidShare size={16} color="white" />
-                Compartir
-              </button>
-              <button class="btn-header btn-primary">
-                <FaSolidPlus size={16} color="white" />
-                Nuevo Evento
-              </button>
-              <button class="btn-header btn-logout" onclick={handleLogout}>
-                <FaSolidArrowRightFromBracket size={16} color="white" />
-                Cerrar Sesión
-              </button>
-            </div>
-          </header>
+        <AdminHeader
+          pageTitle="¡Bienvenido de vuelta, Admin! 👋"
+          pageSubtitle="Gestiona todos los aspectos del Centro Cultural Banreservas"
+          breadcrumbs={breadcrumbs}
+          buttons={headerButtons}
+          titleIcon={FaSolidHouse}
+        />
 
           <div class="main-content">
             {/* Alerta de datos mock */}

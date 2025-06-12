@@ -1,7 +1,9 @@
 import { Component, createSignal, createEffect, onMount, Show, For } from 'solid-js';
 import { visitantesService, eventosService } from '../../lib/supabase/services';
 import { Visitante, Evento } from '../../lib/types';
+import AdminLayout from '../../components/AdminLayout';
 import '../../styles/admin.css';
+import '../../styles/visitantes-filters.css';
 
 // Solid Icons
 import {
@@ -17,7 +19,9 @@ import {
   FaSolidDownload,
   FaSolidCode,
   FaSolidChartLine,
-  FaSolidTicket
+  FaSolidTicket,
+  FaSolidFileImport,
+  FaSolidUpload
 } from 'solid-icons/fa';
 
 // Tipos adicionales para invitaciones
@@ -46,12 +50,24 @@ const VisitantesAdmin: Component = () => {
   // Estados de modales
   const [modalInvitacion, setModalInvitacion] = createSignal(false);
   const [modalDetalles, setModalDetalles] = createSignal(false);
+  const [modalImportacion, setModalImportacion] = createSignal(false);
   const [visitanteSeleccionado, setVisitanteSeleccionado] = createSignal<Visitante | null>(null);
   
   // Estados de invitaciones
   const [invitaciones, setInvitaciones] = createSignal<Invitacion[]>([]);
   const [eventoInvitacion, setEventoInvitacion] = createSignal('');
   const [visitantesSeleccionados, setVisitantesSeleccionados] = createSignal<string[]>([]);
+  
+  // Estados de importación
+  const [archivoImportacion, setArchivoImportacion] = createSignal<File | null>(null);
+  const [datosImportacion, setDatosImportacion] = createSignal<any[]>([]);
+  const [procesandoImportacion, setProcesandoImportacion] = createSignal(false);
+  const [resultadoImportacion, setResultadoImportacion] = createSignal<{
+    exitosos: number;
+    errores: number;
+    duplicados: number;
+    detalles: string[];
+  } | null>(null);
   
   // Estadísticas
   const [estadisticas, setEstadisticas] = createSignal({
@@ -252,16 +268,142 @@ const VisitantesAdmin: Component = () => {
     );
   };
 
+  // Funciones de importación
+  const procesarArchivoImportacion = async (archivo: File) => {
+    try {
+      const texto = await archivo.text();
+      let datos: any[] = [];
+      
+      if (archivo.name.endsWith('.csv')) {
+        // Procesar CSV
+        const lineas = texto.split('\n').filter(linea => linea.trim());
+        const encabezados = lineas[0].split(',').map(h => h.trim().toLowerCase());
+        
+        for (let i = 1; i < lineas.length; i++) {
+          const valores = lineas[i].split(',').map(v => v.trim());
+          const visitante: any = {};
+          
+          encabezados.forEach((encabezado, index) => {
+            const valor = valores[index]?.replace(/"/g, '') || '';
+            
+            // Mapear campos comunes
+            if (encabezado.includes('nombre') || encabezado.includes('name')) {
+              visitante.nombre = valor;
+            } else if (encabezado.includes('email') || encabezado.includes('correo')) {
+              visitante.email = valor;
+            } else if (encabezado.includes('telefono') || encabezado.includes('phone') || encabezado.includes('tel')) {
+              visitante.telefono = valor;
+            } else if (encabezado.includes('intereses') || encabezado.includes('interests')) {
+              visitante.intereses = valor ? valor.split(';').map(i => i.trim()) : [];
+            }
+          });
+          
+          if (visitante.nombre && visitante.email) {
+            datos.push(visitante);
+          }
+        }
+      } else if (archivo.name.endsWith('.json')) {
+        // Procesar JSON
+        const jsonData = JSON.parse(texto);
+        datos = Array.isArray(jsonData) ? jsonData : [jsonData];
+      }
+      
+      setDatosImportacion(datos);
+      console.log('📄 Archivo procesado:', { archivo: archivo.name, registros: datos.length });
+      
+    } catch (error) {
+      console.error('❌ Error procesando archivo:', error);
+      alert('❌ Error procesando el archivo. Verifica el formato.');
+    }
+  };
+
+  const ejecutarImportacion = async () => {
+    if (datosImportacion().length === 0) {
+      alert('⚠️ No hay datos para importar');
+      return;
+    }
+    
+    setProcesandoImportacion(true);
+    const resultado = {
+      exitosos: 0,
+      errores: 0,
+      duplicados: 0,
+      detalles: [] as string[]
+    };
+    
+    try {
+      for (const dato of datosImportacion()) {
+        try {
+          // Validar datos requeridos
+          if (!dato.nombre || !dato.email) {
+            resultado.errores++;
+            resultado.detalles.push(`❌ ${dato.nombre || 'Sin nombre'}: Faltan datos requeridos`);
+            continue;
+          }
+          
+          // Verificar duplicados por email
+          const existente = visitantes().find(v => v.email.toLowerCase() === dato.email.toLowerCase());
+          if (existente) {
+            resultado.duplicados++;
+            resultado.detalles.push(`⚠️ ${dato.nombre}: Email ya existe`);
+            continue;
+          }
+          
+          // Crear visitante
+          const nuevoVisitante = {
+            nombre: dato.nombre,
+            email: dato.email.toLowerCase(),
+            telefono: dato.telefono || '',
+            intereses: dato.intereses || [],
+            estado: 'activo',
+            fecha_registro: new Date().toISOString()
+          };
+          
+          await visitantesService.crear(nuevoVisitante);
+          resultado.exitosos++;
+          resultado.detalles.push(`✅ ${dato.nombre}: Importado exitosamente`);
+          
+        } catch (error) {
+          resultado.errores++;
+          resultado.detalles.push(`❌ ${dato.nombre}: Error - ${error}`);
+        }
+      }
+      
+      setResultadoImportacion(resultado);
+      
+      // Recargar datos si hubo importaciones exitosas
+      if (resultado.exitosos > 0) {
+        await cargarDatos();
+      }
+      
+      console.log('📊 Importación completada:', resultado);
+      
+    } catch (error) {
+      console.error('❌ Error en importación:', error);
+      alert('❌ Error durante la importación');
+    } finally {
+      setProcesandoImportacion(false);
+    }
+  };
+
+  const resetearImportacion = () => {
+    setArchivoImportacion(null);
+    setDatosImportacion([]);
+    setResultadoImportacion(null);
+    setModalImportacion(false);
+  };
+
   return (
-    <div class="admin-content">
-      {/* Header */}
-      <div class="breadcrumb">
-        <span>Visitantes</span>
-        <span>/</span>
-        <span>Gestión</span>
-        <span>/</span>
-        <span>Centro Cultural Banreservas</span>
-      </div>
+    <AdminLayout currentPage="visitantes">
+      <div class="admin-content">
+        {/* Header */}
+        <div class="breadcrumb">
+          <span>Visitantes</span>
+          <span>/</span>
+          <span>Gestión</span>
+          <span>/</span>
+          <span>Centro Cultural Banreservas</span>
+        </div>
 
       <div class="welcome-section">
         <div class="welcome-content">
@@ -275,6 +417,10 @@ const VisitantesAdmin: Component = () => {
           <button class="header-btn share" onClick={() => setModalInvitacion(true)}>
             <FaSolidEnvelope size={16} />
             Invitar
+          </button>
+          <button class="header-btn primary" onClick={() => setModalImportacion(true)}>
+            <FaSolidFileImport size={16} />
+            Importar
           </button>
           <button class="header-btn create">
             <FaSolidDownload size={16} />
@@ -348,167 +494,326 @@ const VisitantesAdmin: Component = () => {
           </div>
         </div>
 
-        {/* Filtros */}
-        <div class="filters-section">
-          <div class="filter-group">
-            <div class="search-box">
-                              <FaSolidMagnifyingGlass size={16} color="#666" />
-              <input
-                type="text"
-                placeholder="Buscar por nombre, email o teléfono..."
-                value={busqueda()}
-                onInput={(e) => setBusqueda(e.target.value)}
-              />
+        {/* Filtros Profesionales */}
+        <div class="professional-filters">
+          <div class="filters-container">
+            <div class="primary-filter">
+              <div class="search-input-container">
+                <FaSolidMagnifyingGlass size={16} color="#6b7280" />
+                <input
+                  type="text"
+                  class="professional-search"
+                  placeholder="Buscar por nombre, email o teléfono..."
+                  value={busqueda()}
+                  onInput={(e) => setBusqueda(e.target.value)}
+                />
+                <Show when={busqueda()}>
+                  <button 
+                    class="clear-search"
+                    onClick={() => setBusqueda('')}
+                  >
+                    ×
+                  </button>
+                </Show>
+              </div>
             </div>
             
-            <select value={filtroInteres()} onChange={(e) => setFiltroInteres(e.target.value)}>
-              <option value="">Todos los intereses</option>
-              <For each={interesesUnicos()}>
-                {(interes) => <option value={interes}>{interes}</option>}
-              </For>
-            </select>
-            
-            <select value={filtroEstado()} onChange={(e) => setFiltroEstado(e.target.value)}>
-              <option value="">Todos los estados</option>
-              <option value="activo">Activos</option>
-              <option value="inactivo">Inactivos</option>
-            </select>
+            <div class="secondary-filters">
+              <div class="filter-group">
+                <label class="filter-label">
+                  <FaSolidHeart size={12} />
+                  Intereses
+                </label>
+                <select 
+                  class="professional-select"
+                  value={filtroInteres()} 
+                  onChange={(e) => setFiltroInteres(e.target.value)}
+                >
+                  <option value="">Todos los intereses</option>
+                  <For each={interesesUnicos()}>
+                    {(interes) => <option value={interes}>{interes}</option>}
+                  </For>
+                </select>
+              </div>
+              
+              <div class="filter-group">
+                <label class="filter-label">
+                  <FaSolidUserCheck size={12} />
+                  Estado
+                </label>
+                <select 
+                  class="professional-select"
+                  value={filtroEstado()} 
+                  onChange={(e) => setFiltroEstado(e.target.value)}
+                >
+                  <option value="">Todos los estados</option>
+                  <option value="activo">Activos</option>
+                  <option value="inactivo">Inactivos</option>
+                </select>
+              </div>
+              
+              <Show when={busqueda() || filtroInteres() || filtroEstado()}>
+                <button 
+                  class="clear-filters-btn"
+                  onClick={() => {
+                    setBusqueda('');
+                    setFiltroInteres('');
+                    setFiltroEstado('');
+                  }}
+                >
+                  <FaSolidFilter size={12} />
+                  Limpiar filtros
+                </button>
+              </Show>
+            </div>
+          </div>
+          
+          <div class="filters-summary">
+            <span class="results-count">
+              Mostrando {visitantesFiltrados().length} de {visitantes().length} visitantes
+            </span>
           </div>
         </div>
 
         {/* Lista de Visitantes */}
-        <div class="table-container">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>
-                  <input 
-                    type="checkbox" 
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setVisitantesSeleccionados(visitantesFiltrados().map(v => v.id));
-                      } else {
-                        setVisitantesSeleccionados([]);
-                      }
-                    }}
-                  />
-                </th>
-                <th>Visitante</th>
-                <th>Contacto</th>
-                <th>Intereses</th>
-                <th>Estado</th>
-                <th>Registro</th>
-                <th>Invitaciones</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <For each={visitantesFiltrados()}>
-                {(visitante) => {
-                  const invitacionesVisitante = invitaciones().filter(i => i.visitanteId === visitante.id);
-                  return (
-                    <tr>
-                      <td>
-                        <input 
-                          type="checkbox" 
-                          checked={visitantesSeleccionados().includes(visitante.id)}
-                          onChange={() => toggleSeleccionVisitante(visitante.id)}
-                        />
-                      </td>
-                      <td>
-                        <div class="visitor-info">
-                          <div class="visitor-avatar">
-                            {visitante.nombre.charAt(0)}
+        <div class="visitors-table-section">
+          <div class="table-header">
+            <div class="table-title">
+              <h3>👥 Lista de Visitantes ({visitantesFiltrados().length})</h3>
+              <p>Administra y supervisa todos los visitantes registrados</p>
+            </div>
+            <div class="table-actions">
+              <Show when={visitantesSeleccionados().length > 0}>
+                <span class="selection-counter">
+                  {visitantesSeleccionados().length} seleccionados
+                </span>
+                <button class="btn-bulk-action">
+                  <FaSolidEnvelope size={14} />
+                  Invitar seleccionados
+                </button>
+              </Show>
+            </div>
+          </div>
+
+          <div class="professional-table-container">
+            <table class="professional-table">
+              <thead>
+                <tr>
+                  <th class="checkbox-col">
+                    <div class="th-content">
+                      <input 
+                        type="checkbox" 
+                        class="professional-checkbox"
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setVisitantesSeleccionados(visitantesFiltrados().map(v => v.id));
+                          } else {
+                            setVisitantesSeleccionados([]);
+                          }
+                        }}
+                      />
+                    </div>
+                  </th>
+                  <th class="visitor-col">
+                    <div class="th-content">
+                      <FaSolidUsers size={14} />
+                      <span>Visitante</span>
+                    </div>
+                  </th>
+                  <th class="contact-col">
+                    <div class="th-content">
+                      <FaSolidPhone size={14} />
+                      <span>Contacto</span>
+                    </div>
+                  </th>
+                  <th class="interests-col">
+                    <div class="th-content">
+                      <FaSolidHeart size={14} />
+                      <span>Intereses</span>
+                    </div>
+                  </th>
+                  <th class="status-col">
+                    <div class="th-content">
+                      <FaSolidUserCheck size={14} />
+                      <span>Estado</span>
+                    </div>
+                  </th>
+                  <th class="date-col">
+                    <div class="th-content">
+                      <FaSolidCalendarCheck size={14} />
+                      <span>Registro</span>
+                    </div>
+                  </th>
+                  <th class="invitations-col">
+                    <div class="th-content">
+                      <FaSolidEnvelope size={14} />
+                      <span>Actividad</span>
+                    </div>
+                  </th>
+                  <th class="actions-col">
+                    <div class="th-content">
+                      <span>Acciones</span>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={visitantesFiltrados()}>
+                  {(visitante) => {
+                    const invitacionesVisitante = invitaciones().filter(i => i.visitanteId === visitante.id);
+                    const isSelected = visitantesSeleccionados().includes(visitante.id);
+                    
+                    return (
+                      <tr class={isSelected ? 'selected' : ''}>
+                        <td class="checkbox-col">
+                          <input 
+                            type="checkbox" 
+                            class="professional-checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSeleccionVisitante(visitante.id)}
+                          />
+                        </td>
+                        <td class="visitor-col">
+                          <div class="visitor-profile">
+                            <div class="visitor-avatar">
+                              {/* Avatar sin letra - solo gradiente */}
+                            </div>
+                            <div class="visitor-details">
+                              <div class="visitor-name">{visitante.nombre}</div>
+                              <div class="visitor-id">ID: {visitante.id.substring(0, 8)}...</div>
+                            </div>
                           </div>
-                          <div>
-                            <div class="visitor-name">{visitante.nombre}</div>
-                            <div class="visitor-id">ID: {visitante.id.substring(0, 8)}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div class="contact-info">
-                          <div class="contact-email">
-                            <FaSolidEnvelope size={12} />
-                            {visitante.email}
-                          </div>
-                          <div class="contact-phone">
-                            <FaSolidPhone size={12} />
-                            {visitante.telefono || 'No registrado'}
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div class="interests">
-                          <For each={visitante.intereses?.slice(0, 2)}>
-                            {(interes) => (
-                              <span class="interest-tag">
-                                <FaSolidHeart size={10} />
-                                {interes}
+                        </td>
+                        <td class="contact-col">
+                          <div class="contact-info">
+                            <div class="contact-item">
+                              <FaSolidEnvelope size={12} color="#6b7280" />
+                              <span class="contact-text">{visitante.email}</span>
+                            </div>
+                            <div class="contact-item">
+                              <FaSolidPhone size={12} color="#6b7280" />
+                              <span class="contact-text">
+                                {visitante.telefono && visitante.telefono.trim() !== '' 
+                                  ? visitante.telefono 
+                                  : 'No registrado'}
                               </span>
-                            )}
-                          </For>
-                          {visitante.intereses && visitante.intereses.length > 2 && (
-                            <span class="interest-more">+{visitante.intereses.length - 2}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <span class={`status-badge ${visitante.estado || 'activo'}`}>
-                          {visitante.estado || 'activo'}
-                        </span>
-                      </td>
-                      <td class="text-sm text-gray-600">
-                        {new Date(visitante.fecha_registro).toLocaleDateString()}
-                      </td>
-                      <td>
-                        <div class="invitations-summary">
-                          <span class="inv-count">{invitacionesVisitante.length}</span>
-                          <div class="inv-states">
-                            <span class="inv-state sent">{invitacionesVisitante.filter(i => i.estado === 'enviada').length}</span>
-                            <span class="inv-state confirmed">{invitacionesVisitante.filter(i => i.estado === 'confirmada').length}</span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div class="action-buttons">
-                          <button 
-                            class="btn-action view"
-                            onClick={() => {
-                              setVisitanteSeleccionado(visitante);
-                              setModalDetalles(true);
-                            }}
-                            title="Ver detalles"
-                          >
-                            👁️
-                          </button>
-                          <button 
-                            class="btn-action invite"
-                            onClick={() => {
-                              if (eventos().length > 0) {
-                                enviarInvitacion(visitante.id, eventos()[0].id);
-                              } else {
-                                alert('No hay eventos disponibles');
-                              }
-                            }}
-                            title="Enviar invitación"
-                          >
-                            📧
-                          </button>
-                          <button 
-                            class="btn-action checkin"
-                            title="Ver códigos"
-                          >
-                            <FaSolidCode size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                }}
-              </For>
-            </tbody>
-          </table>
+                        </td>
+                        <td class="interests-col">
+                          <div class="interests-container">
+                            <Show when={visitante.intereses && visitante.intereses.length > 0}>
+                              <For each={visitante.intereses.slice(0, 2)}>
+                                {(interes) => (
+                                  <span class="interest-tag">
+                                    <FaSolidHeart size={8} />
+                                    {interes}
+                                  </span>
+                                )}
+                              </For>
+                              <Show when={visitante.intereses.length > 2}>
+                                <span class="interest-more">+{visitante.intereses.length - 2}</span>
+                              </Show>
+                            </Show>
+                            <Show when={!visitante.intereses || visitante.intereses.length === 0}>
+                              <span class="no-interests">Sin intereses</span>
+                            </Show>
+                          </div>
+                        </td>
+                        <td class="status-col">
+                          <span class={`professional-status ${visitante.estado || 'activo'}`}>
+                            <span class="status-dot"></span>
+                            {visitante.estado || 'activo'}
+                          </span>
+                        </td>
+                        <td class="date-col">
+                          <div class="date-info">
+                            <div class="date-primary">
+                              {new Date(visitante.fecha_registro).toLocaleDateString('es-DO', {
+                                day: '2-digit',
+                                month: 'short'
+                              })}
+                            </div>
+                            <div class="date-secondary">
+                              {new Date(visitante.fecha_registro).getFullYear()}
+                            </div>
+                          </div>
+                        </td>
+                        <td class="invitations-col">
+                          <div class="activity-summary">
+                            <div class="activity-item">
+                              <span class="activity-number">{invitacionesVisitante.length}</span>
+                              <span class="activity-label">Invitaciones</span>
+                            </div>
+                            <div class="activity-badges">
+                              <Show when={invitacionesVisitante.filter(i => i.estado === 'enviada').length > 0}>
+                                <span class="activity-badge sent">
+                                  {invitacionesVisitante.filter(i => i.estado === 'enviada').length}
+                                </span>
+                              </Show>
+                              <Show when={invitacionesVisitante.filter(i => i.estado === 'confirmada').length > 0}>
+                                <span class="activity-badge confirmed">
+                                  {invitacionesVisitante.filter(i => i.estado === 'confirmada').length}
+                                </span>
+                              </Show>
+                            </div>
+                          </div>
+                        </td>
+                        <td class="actions-col">
+                          <div class="action-buttons">
+                            <button 
+                              class="btn-action primary"
+                              onClick={() => {
+                                setVisitanteSeleccionado(visitante);
+                                setModalDetalles(true);
+                              }}
+                              title="Ver detalles completos"
+                            >
+                              <FaSolidUsers size={14} />
+                            </button>
+                            <button 
+                              class="btn-action success"
+                              onClick={() => {
+                                if (eventos().length > 0) {
+                                  enviarInvitacion(visitante.id, eventos()[0].id);
+                                } else {
+                                  alert('No hay eventos disponibles');
+                                }
+                              }}
+                              title="Enviar invitación"
+                            >
+                              <FaSolidEnvelope size={14} />
+                            </button>
+                            <button 
+                              class="btn-action secondary"
+                              title="Ver códigos de acceso"
+                            >
+                              <FaSolidCode size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }}
+                </For>
+              </tbody>
+            </table>
+            
+            <Show when={visitantesFiltrados().length === 0}>
+              <div class="empty-state">
+                <FaSolidUsers size={48} color="#cbd5e1" />
+                <h3>No se encontraron visitantes</h3>
+                <p>Intenta ajustar los filtros o importa nuevos visitantes</p>
+                <button 
+                  class="btn-primary"
+                  onClick={() => setModalImportacion(true)}
+                >
+                  <FaSolidFileImport size={16} />
+                  Importar Visitantes
+                </button>
+              </div>
+            </Show>
+          </div>
         </div>
       </Show>
 
@@ -637,7 +942,187 @@ const VisitantesAdmin: Component = () => {
           </div>
         </div>
       </Show>
+
+      {/* Modal de Importación */}
+      <Show when={modalImportacion()}>
+        <div class="modal-overlay" onClick={() => setModalImportacion(false)}>
+          <div class="modal-content large" onClick={(e) => e.stopPropagation()}>
+            <div class="modal-header">
+              <h3>📥 Importar Visitantes</h3>
+              <button class="modal-close" onClick={() => setModalImportacion(false)}>×</button>
+            </div>
+            
+            <div class="modal-body">
+              <Show when={!resultadoImportacion()}>
+                <div class="import-section">
+                  <div class="import-instructions">
+                    <h4>📋 Instrucciones:</h4>
+                    <ul>
+                      <li>📄 Formatos soportados: CSV, JSON</li>
+                      <li>📝 Campos requeridos: <strong>nombre, email</strong></li>
+                      <li>📞 Campos opcionales: telefono, intereses</li>
+                      <li>⚠️ Los emails duplicados serán ignorados</li>
+                    </ul>
+                  </div>
+                  
+                  <div class="file-upload-area">
+                    <Show when={!archivoImportacion()}>
+                      <div class="upload-dropzone">
+                        <FaSolidUpload size={48} color="#666" />
+                        <p>Arrastra tu archivo aquí o haz clic para seleccionar</p>
+                        <input 
+                          type="file" 
+                          accept=".csv,.json"
+                          style="display: none;"
+                          id="file-import"
+                          onChange={async (e) => {
+                            const archivo = e.target.files?.[0];
+                            if (archivo) {
+                              setArchivoImportacion(archivo);
+                              await procesarArchivoImportacion(archivo);
+                            }
+                          }}
+                        />
+                        <button 
+                          class="btn-primary"
+                          onClick={() => document.getElementById('file-import')?.click()}
+                        >
+                          Seleccionar Archivo
+                        </button>
+                      </div>
+                    </Show>
+                    
+                    <Show when={archivoImportacion()}>
+                      <div class="file-selected">
+                        <div class="file-info">
+                          <FaSolidFileImport size={24} color="#10B981" />
+                          <div>
+                            <p><strong>{archivoImportacion()?.name}</strong></p>
+                            <p>{datosImportacion().length} registros encontrados</p>
+                          </div>
+                        </div>
+                        <button 
+                          class="btn-secondary"
+                          onClick={() => {
+                            setArchivoImportacion(null);
+                            setDatosImportacion([]);
+                          }}
+                        >
+                          Cambiar archivo
+                        </button>
+                      </div>
+                    </Show>
+                  </div>
+                  
+                  <Show when={datosImportacion().length > 0}>
+                    <div class="import-preview">
+                      <h4>👀 Vista previa de los datos:</h4>
+                      <div class="preview-table">
+                        <table class="admin-table">
+                          <thead>
+                            <tr>
+                              <th>Nombre</th>
+                              <th>Email</th>
+                              <th>Teléfono</th>
+                              <th>Intereses</th>
+                              <th>Estado</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <For each={datosImportacion().slice(0, 5)}>
+                              {(dato) => (
+                                <tr>
+                                  <td>{dato.nombre || '❌ Requerido'}</td>
+                                  <td>{dato.email || '❌ Requerido'}</td>
+                                  <td>{dato.telefono || '-'}</td>
+                                  <td>
+                                    <Show when={dato.intereses?.length}>
+                                      {dato.intereses.slice(0, 2).join(', ')}
+                                      {dato.intereses.length > 2 && `... +${dato.intereses.length - 2}`}
+                                    </Show>
+                                    <Show when={!dato.intereses?.length}>-</Show>
+                                  </td>
+                                  <td>
+                                    <span class={`status-badge ${(!dato.nombre || !dato.email) ? 'error' : 'activo'}`}>
+                                      {(!dato.nombre || !dato.email) ? 'Error' : 'Válido'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              )}
+                            </For>
+                          </tbody>
+                        </table>
+                        <Show when={datosImportacion().length > 5}>
+                          <p class="preview-note">... y {datosImportacion().length - 5} registros más</p>
+                        </Show>
+                      </div>
+                    </div>
+                  </Show>
+                </div>
+              </Show>
+              
+              <Show when={resultadoImportacion()}>
+                <div class="import-results">
+                  <h4>📊 Resultados de la Importación:</h4>
+                  <div class="results-summary">
+                    <div class="result-item success">
+                      <strong>✅ Exitosos:</strong> {resultadoImportacion()?.exitosos}
+                    </div>
+                    <div class="result-item warning">
+                      <strong>⚠️ Duplicados:</strong> {resultadoImportacion()?.duplicados}
+                    </div>
+                    <div class="result-item error">
+                      <strong>❌ Errores:</strong> {resultadoImportacion()?.errores}
+                    </div>
+                  </div>
+                  
+                  <div class="results-details">
+                    <h5>📝 Detalles:</h5>
+                    <div class="details-list">
+                      <For each={resultadoImportacion()?.detalles.slice(0, 10)}>
+                        {(detalle) => <p>{detalle}</p>}
+                      </For>
+                      <Show when={(resultadoImportacion()?.detalles.length || 0) > 10}>
+                        <p>... y {(resultadoImportacion()?.detalles.length || 0) - 10} más</p>
+                      </Show>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+            </div>
+            
+            <div class="modal-footer">
+              <Show when={!resultadoImportacion()}>
+                <button class="btn-secondary" onClick={() => setModalImportacion(false)}>
+                  Cancelar
+                </button>
+                <Show when={datosImportacion().length > 0}>
+                  <button 
+                    class="btn-primary" 
+                    onClick={ejecutarImportacion}
+                    disabled={procesandoImportacion()}
+                  >
+                    <Show when={procesandoImportacion()}>
+                      🔄 Importando...
+                    </Show>
+                    <Show when={!procesandoImportacion()}>
+                      📥 Importar {datosImportacion().length} Visitantes
+                    </Show>
+                  </button>
+                </Show>
+              </Show>
+              
+              <Show when={resultadoImportacion()}>
+                <button class="btn-primary" onClick={resetearImportacion}>
+                  ✅ Finalizar
+                </button>
+              </Show>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
+    </AdminLayout>
   );
 };
 

@@ -1,0 +1,558 @@
+/* === CHECK-IN ADMIN - DARK MODE MINIMALIST UI WITH GLASSMORPHISM === */
+
+/* Fondo principal para la página de check-in */
+[data-page="checkin"] .admin-content,
+.admin-content {
+  background: #ffffff !important;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+/* Header de check-in con glassmorphism */
+.checkin-page-header {
+  background: linear-gradient(135deg, #28AFE5 0%, #119BD1 100%) !important;
+  padding: 24px;
+  margin-bottom: 24px;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(40, 175, 229, 0.2);
+}
+
+.checkin-page-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3e%3cdefs%3e%3cpattern id='checkin-pattern' width='25' height='25' patternUnits='userSpaceOnUse'%3e%3cpath d='M12.5,0 L12.5,25 M0,12.5 L25,12.5' stroke='rgba(255,255,255,0.1)' stroke-width='0.5'/%3e%3c/pattern%3e%3c/defs%3e%3crect width='100' height='100' fill='url(%23checkin-pattern)' /%3e%3c/svg%3e");
+  opacity: 0.3;
+}
+
+.checkin-page-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+}
+
+.checkin-title-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.checkin-title-icon {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.checkin-title-text h1 {
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  margin: 0 !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.checkin-title-text p {
+  font-size: 14px !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  margin: 4px 0 0 0 !important;
+}
+
+/* Indicador "En vivo" */
+.checkin-live-indicator {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  background: rgba(34, 197, 94, 0.2) !important;
+  color: #22c55e !important;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.checkin-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e !important;
+  animation: pulse 2s infinite;
+}
+
+/* Grid de estadísticas */
+.checkin-stats-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  gap: 20px !important;
+  margin-bottom: 32px !important;
+}
+
+.checkin-stat-card {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  border-radius: 12px !important;
+  padding: 20px !important;
+  text-align: center !important;
+  transition: all 0.3s ease !important;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.checkin-stat-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(40, 175, 229, 0.3);
+  box-shadow: 0 8px 32px rgba(40, 175, 229, 0.15);
+}
+
+.checkin-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #28AFE5, #119BD1);
+  opacity: 0.8;
+}
+
+.checkin-stat-icon {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 12px !important;
+  background: rgba(40, 175, 229, 0.2) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 20px !important;
+  color: #28AFE5 !important;
+  margin: 0 auto 16px auto !important;
+  border: 1px solid rgba(40, 175, 229, 0.3) !important;
+}
+
+.checkin-stat-number {
+  font-size: 32px !important;
+  font-weight: 800 !important;
+  color: #1f2937 !important;
+  margin-bottom: 8px !important;
+  text-shadow: none;
+}
+
+.checkin-stat-label {
+  color: rgba(0, 0, 0, 0.7) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+/* Panel principal de check-in */
+.checkin-main-panel {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  border-radius: 16px !important;
+  padding: 32px !important;
+  margin-bottom: 32px !important;
+  text-align: center !important;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08) !important;
+}
+
+.checkin-main-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3e%3cdefs%3e%3cpattern id='panel-pattern' width='20' height='20' patternUnits='userSpaceOnUse'%3e%3ccircle cx='10' cy='10' r='1.5' fill='rgba(255,255,255,0.03)'/%3e%3c/pattern%3e%3c/defs%3e%3crect width='100' height='100' fill='url(%23panel-pattern)' /%3e%3c/svg%3e");
+  opacity: 0.4;
+}
+
+/* Selector de tipo de check-in */
+.checkin-type-selector {
+  display: flex !important;
+  gap: 12px !important;
+  margin-bottom: 32px !important;
+  justify-content: center !important;
+  position: relative;
+  z-index: 1;
+}
+
+.checkin-type-btn {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 12px 24px !important;
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: rgba(0, 0, 0, 0.8) !important;
+  cursor: pointer !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  backdrop-filter: blur(10px) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+.checkin-type-btn:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: rgba(0, 0, 0, 0.3) !important;
+  color: #000000 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.checkin-type-btn.active {
+  background: linear-gradient(135deg, #28AFE5, #119BD1) !important;
+  border-color: rgba(40, 175, 229, 0.4) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 16px rgba(40, 175, 229, 0.3);
+}
+
+/* Container de entrada */
+.checkin-input-container {
+  margin-bottom: 32px !important;
+  max-width: 400px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  position: relative;
+  z-index: 1;
+}
+
+.checkin-input-label {
+  display: flex !important;
+  align-items: center !important;
+  color: rgba(0, 0, 0, 0.9) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  margin-bottom: 12px !important;
+  text-shadow: none;
+}
+
+.checkin-input {
+  width: 100% !important;
+  padding: 16px 20px !important;
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: #000000 !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  backdrop-filter: blur(10px) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.checkin-input::placeholder {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+.checkin-input:focus {
+  outline: none !important;
+  border-color: rgba(40, 175, 229, 0.6) !important;
+  background: rgba(255, 255, 255, 1) !important;
+  box-shadow: 0 0 0 3px rgba(40, 175, 229, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+/* Botón de check-in */
+.checkin-submit-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 16px 32px !important;
+  border: none !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+  color: #ffffff !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.3);
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.checkin-submit-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #16a34a, #15803d) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+}
+
+.checkin-submit-btn:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+/* Loading spinner */
+.checkin-loading-spinner {
+  width: 20px !important;
+  height: 20px !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  border-top: 2px solid #ffffff !important;
+  border-radius: 50% !important;
+  animation: spin 1s linear infinite;
+}
+
+/* Estados de resultado */
+.checkin-status {
+  margin-top: 32px !important;
+  padding: 24px !important;
+  border-radius: 16px !important;
+  backdrop-filter: blur(20px) !important;
+  position: relative;
+  z-index: 1;
+  text-align: center !important;
+}
+
+.checkin-status.success {
+  background: rgba(34, 197, 94, 0.2) !important;
+  border: 1px solid rgba(34, 197, 94, 0.3) !important;
+  color: #ffffff !important;
+}
+
+.checkin-status.error {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  color: #ffffff !important;
+}
+
+.checkin-status-icon {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 24px !important;
+  margin: 0 auto 16px auto !important;
+}
+
+.checkin-status.success .checkin-status-icon {
+  background: rgba(34, 197, 94, 0.3) !important;
+  color: #22c55e !important;
+}
+
+.checkin-status.error .checkin-status-icon {
+  background: rgba(239, 68, 68, 0.3) !important;
+  color: #ef4444 !important;
+}
+
+.checkin-status-title {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  margin-bottom: 8px !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.checkin-status-message {
+  font-size: 14px !important;
+  opacity: 0.9 !important;
+  margin-bottom: 20px !important;
+}
+
+/* Información del visitante */
+.checkin-visitor-info {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 20px !important;
+  background: rgba(248, 250, 252, 0.8) !important;
+  border-radius: 12px !important;
+  margin-top: 16px !important;
+  text-align: left !important;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.checkin-visitor-avatar {
+  width: 60px !important;
+  height: 60px !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, #28AFE5, #119BD1) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  border: 2px solid rgba(40, 175, 229, 0.2);
+}
+
+.checkin-visitor-details {
+  flex: 1 !important;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.checkin-detail-item {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.checkin-detail-label {
+  font-size: 12px !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.checkin-detail-value {
+  font-size: 14px !important;
+  color: #1f2937 !important;
+  font-weight: 500 !important;
+}
+
+/* Check-ins recientes */
+.checkin-recent-section {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  border-radius: 16px !important;
+  padding: 24px !important;
+  margin-bottom: 32px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.checkin-recent-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: 20px !important;
+  padding-bottom: 16px !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+.checkin-recent-title {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  text-shadow: none;
+}
+
+.checkin-recent-refresh {
+  padding: 8px 16px !important;
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: rgba(0, 0, 0, 0.8) !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  backdrop-filter: blur(10px) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.checkin-recent-refresh:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  color: #000000 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.checkin-recent-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+.checkin-recent-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 16px !important;
+  background: rgba(248, 250, 252, 0.8) !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.2s ease !important;
+}
+
+.checkin-recent-item:hover {
+  background: rgba(241, 245, 249, 0.9) !important;
+  border-color: rgba(0, 0, 0, 0.2) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.checkin-recent-avatar {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, #28AFE5, #119BD1) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  border: 2px solid rgba(40, 175, 229, 0.2) !important;
+}
+
+.checkin-recent-info {
+  flex: 1 !important;
+}
+
+.checkin-recent-name {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: rgba(0, 0, 0, 0.9) !important;
+  margin-bottom: 4px !important;
+}
+
+.checkin-recent-event {
+  font-size: 12px !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+.checkin-recent-time {
+  font-size: 12px !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.checkin-recent-status {
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 50% !important;
+  background: #22c55e !important;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5) !important;
+  animation: pulse 2s infinite;
+}
+
+/* Animaciones */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
