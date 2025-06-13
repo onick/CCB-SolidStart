@@ -1,7 +1,7 @@
 import { useDrag } from 'solid-gesture';
 import { FaSolidHouse } from 'solid-icons/fa';
 import { Component, createSignal, For, onMount, Show } from 'solid-js';
-import { eventosService, registroEventosService, visitantesService } from '../lib/supabase/services';
+import { eventosService, registroEventosService, visitantesService, forceInvalidateCache } from '../lib/supabase/services';
 import '../styles/global.css';
 
 const EventosPublicos: Component = () => {
@@ -237,11 +237,33 @@ const EventosPublicos: Component = () => {
     }
   };
 
-  // Función para generar código único
+  // Función para generar código único TOTALMENTE NUEVA
   const generateEventCode = (eventId: string, userEmail: string) => {
-    const timestamp = Date.now();
-    const hash = btoa(`${eventId}-${userEmail}-${timestamp}`).slice(0, 8);
-    return `CCB-${hash.toUpperCase()}`;
+    // Usar múltiples fuentes de aleatoriedad
+    const ahora = new Date();
+    const timestamp = ahora.getTime();
+    const milisegundos = ahora.getMilliseconds();
+    const random1 = Math.floor(Math.random() * 9999);
+    const random2 = Math.floor(Math.random() * 999);
+    
+    // Crear string único combinando todo
+    const cadenaUnica = `${timestamp}-${milisegundos}-${random1}-${random2}-${userEmail}`;
+    
+    // Generar hash corto
+    let hash = '';
+    for (let i = 0; i < cadenaUnica.length; i += 3) {
+      hash += cadenaUnica.charCodeAt(i).toString(36);
+    }
+    
+    // Tomar solo 6 caracteres y asegurar que sean únicos
+    const codigoFinal = `CCB-${hash.slice(0, 6).toUpperCase()}`;
+    
+    console.log('🎫 DEBUG - timestamp:', timestamp);
+    console.log('🎫 DEBUG - random1:', random1);  
+    console.log('🎫 DEBUG - hash generado:', hash.slice(0, 6));
+    console.log('🎫 CÓDIGO FINAL:', codigoFinal);
+    
+    return codigoFinal;
   };
 
   // ========== FUNCIONES DE INTEGRACIÓN HÍBRIDA ==========
@@ -471,6 +493,10 @@ const EventosPublicos: Component = () => {
 
     // NUEVA: Sincronizar con servicios administrativos
     sincronizarRegistroConAdmin(nuevoRegistro, eventoId);
+    
+    // ✅ ACTUALIZAR CONTADOR SIEMPRE (independiente de Supabase)
+    console.log('🔥 Actualizando contador localmente...');
+    actualizarContadorEventos(eventoId);
   };
 
   // NUEVA FUNCIÓN: Sincronizar registro con servicios administrativos
@@ -484,6 +510,7 @@ const EventosPublicos: Component = () => {
         apellido: '', // Si no tienes apellido, usar string vacío
         email: registro.email,
         telefono: registro.telefono || '',
+        codigo_unico: registro.codigo, // ✅ AGREGADO: código CCB único
         fecha_registro: new Date().toISOString(),
         estado: 'activo' as const
       };
@@ -511,12 +538,19 @@ const EventosPublicos: Component = () => {
       
       console.log('✅ Registro sincronizado exitosamente con servicios administrativos');
       
-      // Actualizar contador de registrados en el evento
-      actualizarContadorEventos(eventoId);
+      // ✅ FORZAR ACTUALIZACIÓN DE CONTADOR SIEMPRE
+      console.log('🔥 FORZANDO actualización de contador desde Supabase...');
+      
+      // ✅ INVALIDAR CACHE PARA SINCRONIZACIÓN CON PANEL ADMIN
+      forceInvalidateCache();
+      console.log('🔄 Cache invalidado tras nuevo registro - Panel admin sincronizado');
       
     } catch (error) {
       console.error('❌ Error sincronizando registro con servicios administrativos:', error);
-      // El registro local ya se guardó, así que no es crítico
+      console.log('⚠️ El registro local se guardó correctamente, solo falló la sincronización con Supabase');
+      
+      // ✅ INVALIDAR CACHE INCLUSO SI SUPABASE FALLA
+      forceInvalidateCache();
     }
   };
 

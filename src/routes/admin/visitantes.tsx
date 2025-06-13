@@ -1,5 +1,5 @@
 import { Component, createSignal, createEffect, onMount, Show, For } from 'solid-js';
-import { visitantesService, eventosService } from '../../lib/supabase/services';
+import { visitantesService, eventosService, forceInvalidateCache } from '../../lib/supabase/services';
 import { Visitante, Evento } from '../../lib/types';
 import AdminLayout from '../../components/AdminLayout';
 import '../../styles/admin.css';
@@ -81,12 +81,21 @@ const VisitantesAdmin: Component = () => {
 
   onMount(() => {
     cargarDatos();
+    
+    // 🔄 AUTO-REFRESH cada 30 segundos para sincronización con eventos-públicos
+    setInterval(() => {
+      cargarDatos();
+      console.log('🔄 Auto-refresh: visitantes admin actualizados');
+    }, 30000);
   });
 
   const cargarDatos = async () => {
     setCargando(true);
     try {
       console.log('👥 Cargando visitantes y eventos...');
+      
+      // 🔄 Invalidar cache antes de cargar para obtener datos frescos
+      forceInvalidateCache();
       
       const [visitantesData, eventosData, estadisticasData] = await Promise.all([
         visitantesService.obtenerTodos(),

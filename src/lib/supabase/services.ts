@@ -579,6 +579,11 @@ export const eventosService = {
           updated_at: new Date().toISOString()
         };
         guardarEventosEnStorage(eventosMockDinamicos); // 💾 Guardar en localStorage
+        
+        // ✅ INVALIDAR CACHE PARA SINCRONIZACIÓN CON EVENTOS-PÚBLICOS
+        invalidateCache('eventos');
+        console.log('🔄 Cache invalidado tras actualización mock - Sincronización automática');
+        
         console.log('✅ Evento mock actualizado y guardado:', eventosMockDinamicos[index].titulo);
         return eventosMockDinamicos[index];
       }
@@ -599,6 +604,10 @@ export const eventosService = {
       console.error('Error actualizando evento:', error);
       return null;
     }
+    
+    // ✅ INVALIDAR CACHE PARA SINCRONIZACIÓN CON EVENTOS-PÚBLICOS
+    invalidateCache('eventos');
+    console.log('🔄 Cache invalidado tras actualización de evento - Sincronización automática');
     
     return data;
   },
