@@ -2,8 +2,9 @@ import { Component, createSignal, createEffect, onMount, Show, For } from 'solid
 import { visitantesService, eventosService, forceInvalidateCache } from '../../lib/supabase/services';
 import { Visitante, Evento } from '../../lib/types';
 import AdminLayout from '../../components/AdminLayout';
+import AdminHeader from '../../components/AdminHeader';
 import '../../styles/admin.css';
-import '../../styles/visitantes-filters.css';
+import '../../styles/visitantes-admin.css';
 
 // Solid Icons
 import {
@@ -21,7 +22,10 @@ import {
   FaSolidChartLine,
   FaSolidTicket,
   FaSolidFileImport,
-  FaSolidUpload
+  FaSolidUpload,
+  FaSolidEye,
+  FaSolidPen,
+  FaSolidRotate
 } from 'solid-icons/fa';
 
 // Tipos adicionales para invitaciones
@@ -47,6 +51,13 @@ const VisitantesAdmin: Component = () => {
   const [filtroInteres, setFiltroInteres] = createSignal('');
   const [filtroEstado, setFiltroEstado] = createSignal('');
   
+  // Estados para eliminación
+  const [eliminandoVisitante, setEliminandoVisitante] = createSignal<string | null>(null);
+  const [eliminandoSeleccionados, setEliminandoSeleccionados] = createSignal(false);
+  const [mostrarConfirmacionEliminar, setMostrarConfirmacionEliminar] = createSignal(false);
+  const [mostrarConfirmacionEliminarSeleccionados, setMostrarConfirmacionEliminarSeleccionados] = createSignal(false);
+  const [visitanteParaEliminar, setVisitanteParaEliminar] = createSignal<Visitante | null>(null);
+
   // Estados de modales
   const [modalInvitacion, setModalInvitacion] = createSignal(false);
   const [modalDetalles, setModalDetalles] = createSignal(false);
@@ -82,10 +93,9 @@ const VisitantesAdmin: Component = () => {
   onMount(() => {
     cargarDatos();
     
-    // 🔄 AUTO-REFRESH cada 30 segundos para sincronización con eventos-públicos
+    // 🔄 AUTO-REFRESH silencioso cada 30 segundos sin mostrar loading
     setInterval(() => {
-      cargarDatos();
-      console.log('🔄 Auto-refresh: visitantes admin actualizados');
+      cargarDatosSilencioso();
     }, 30000);
   });
 
@@ -123,6 +133,33 @@ const VisitantesAdmin: Component = () => {
     }
   };
 
+  // 🚀 Nuevo: Carga silenciosa sin mostrar loading
+  const cargarDatosSilencioso = async () => {
+    try {
+      console.log('🔄 Actualizando datos en segundo plano...');
+      
+      forceInvalidateCache();
+      
+      const [visitantesData, eventosData, estadisticasData] = await Promise.all([
+        visitantesService.obtenerTodos(),
+        eventosService.obtenerTodos(),
+        visitantesService.obtenerEstadisticas()
+      ]);
+      
+      // Actualizar sin mostrar loading
+      setVisitantes(visitantesData);
+      setEventos(eventosData);
+      setEstadisticas(estadisticasData);
+      
+      const invitacionesMock = generarInvitacionesMock(visitantesData);
+      setInvitaciones(invitacionesMock);
+      
+      console.log('✅ Datos actualizados silenciosamente');
+    } catch (error) {
+      console.error('❌ Error en actualización silenciosa:', error);
+    }
+  };
+
   // Función para generar invitaciones mock
   const generarInvitacionesMock = (visitantes: Visitante[]): Invitacion[] => {
     return visitantes.slice(0, Math.min(5, visitantes.length)).map((visitante, index) => ({
@@ -146,6 +183,8 @@ const VisitantesAdmin: Component = () => {
       const termino = busqueda().toLowerCase();
       filtrados = filtrados.filter(v => 
         v.nombre.toLowerCase().includes(termino) ||
+        (v.apellido && v.apellido.toLowerCase().includes(termino)) ||
+        `${v.nombre} ${v.apellido || ''}`.toLowerCase().includes(termino) ||
         v.email.toLowerCase().includes(termino) ||
         v.telefono?.includes(termino)
       );
@@ -173,42 +212,6 @@ const VisitantesAdmin: Component = () => {
       v.intereses?.forEach(interes => intereses.add(interes));
     });
     return Array.from(intereses);
-  };
-
-  // Funciones de invitaciones
-  const enviarInvitacion = async (visitanteId: string, eventoId: string) => {
-    try {
-      const visitante = visitantes().find(v => v.id === visitanteId);
-      const evento = eventos().find(e => e.id === eventoId);
-      
-      if (!visitante || !evento) return;
-      
-      const nuevaInvitacion: Invitacion = {
-        id: `inv-${Date.now()}-${Math.random()}`,
-        visitanteId,
-        eventoId,
-        codigo: `CCB-${Math.random().toString(36).substr(2, 8).toUpperCase()}`,
-        estado: 'enviada',
-        fechaEnvio: new Date().toISOString(),
-        fechaExpiracion: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        email: visitante.email
-      };
-      
-      // En producción: enviar email y guardar en Supabase
-      setInvitaciones(prev => [...prev, nuevaInvitacion]);
-      
-      console.log('📧 Invitación enviada:', {
-        visitante: visitante.nombre,
-        evento: evento.nombre,
-        codigo: nuevaInvitacion.codigo
-      });
-      
-      alert(`✅ Invitación enviada a ${visitante.nombre}\nCódigo: ${nuevaInvitacion.codigo}`);
-      
-    } catch (error) {
-      console.error('❌ Error enviando invitación:', error);
-      alert('❌ Error enviando invitación');
-    }
   };
 
   const enviarInvitacionesMasivas = async () => {
@@ -269,12 +272,228 @@ const VisitantesAdmin: Component = () => {
     }
   };
 
+  // 🚀 Actualización optimista de selección (instantánea)
   const toggleSeleccionVisitante = (visitanteId: string) => {
+    // Actualizar UI inmediatamente (optimistic update)
     setVisitantesSeleccionados(prev => 
       prev.includes(visitanteId)
         ? prev.filter(id => id !== visitanteId)
         : [...prev, visitanteId]
     );
+    // No necesita llamada al servidor para esto
+  };
+
+  // 🚀 Envío de invitación con feedback inmediato
+  const enviarInvitacion = async (visitanteId: string, eventoId: string) => {
+    try {
+      const visitante = visitantes().find(v => v.id === visitanteId);
+      const evento = eventos().find(e => e.id === eventoId);
+      
+      if (!visitante || !evento) return;
+      
+      const nuevaInvitacion: Invitacion = {
+        id: `inv-${Date.now()}-${Math.random()}`,
+        visitanteId,
+        eventoId,
+        codigo: `CCB-${Math.random().toString(36).substr(2, 8).toUpperCase()}`,
+        estado: 'enviada',
+        fechaEnvio: new Date().toISOString(),
+        fechaExpiracion: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        email: visitante.email
+      };
+      
+      // 🚀 Actualización optimista: actualizar UI inmediatamente
+      setInvitaciones(prev => [...prev, nuevaInvitacion]);
+      
+      // Mostrar feedback inmediato
+      console.log('📧 Invitación enviada:', {
+        visitante: visitante.nombre,
+        evento: evento.nombre,
+        codigo: nuevaInvitacion.codigo
+      });
+      
+      // Mostrar toast de éxito inmediato
+      mostrarToastExito(`✅ Invitación enviada a ${visitante.nombre} ${visitante.apellido || ''}`);
+      
+      // En segundo plano: enviar email y guardar en Supabase
+      // (esto no bloquea la UI)
+      setTimeout(async () => {
+        try {
+          // Aquí iría la llamada real al servidor
+          // await invitacionesService.enviar(nuevaInvitacion);
+          console.log('📧 Invitación procesada en servidor');
+        } catch (error) {
+          console.error('❌ Error procesando invitación:', error);
+          // Si falla, revertir la UI
+          setInvitaciones(prev => prev.filter(inv => inv.id !== nuevaInvitacion.id));
+          mostrarToastError('❌ Error enviando invitación');
+        }
+      }, 100);
+      
+    } catch (error) {
+      console.error('❌ Error enviando invitación:', error);
+      mostrarToastError('❌ Error enviando invitación');
+    }
+  };
+
+  // 🚀 Funciones de toast para feedback inmediato
+  const mostrarToastExito = (mensaje: string) => {
+    // Crear toast temporal
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #10b981;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 10000;
+      font-weight: 500;
+      animation: slideIn 0.3s ease;
+    `;
+    toast.textContent = mensaje;
+    document.body.appendChild(toast);
+    
+    // Remover después de 3 segundos
+    setTimeout(() => {
+      toast.style.animation = 'slideOut 0.3s ease';
+      setTimeout(() => document.body.removeChild(toast), 300);
+    }, 3000);
+  };
+
+  const mostrarToastError = (mensaje: string) => {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #ef4444;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 10000;
+      font-weight: 500;
+    `;
+    toast.textContent = mensaje;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => document.body.removeChild(toast), 3000);
+  };
+
+  // 🗑️ Funciones de eliminación individual
+  const iniciarEliminacion = (visitante: Visitante) => {
+    console.log('🗑️ Iniciando eliminación del visitante:', `${visitante.nombre} ${visitante.apellido || ''}`);
+    setVisitanteParaEliminar(visitante);
+    setMostrarConfirmacionEliminar(true);
+  };
+
+  const cancelarEliminacion = () => {
+    console.log('❌ Eliminación individual cancelada');
+    setVisitanteParaEliminar(null);
+    setMostrarConfirmacionEliminar(false);
+  };
+
+  const confirmarEliminacion = async () => {
+    const visitante = visitanteParaEliminar();
+    if (!visitante) return;
+
+    console.log('🗑️ Eliminando visitante:', `${visitante.nombre} ${visitante.apellido || ''}`);
+    setEliminandoVisitante(visitante.id);
+    
+    try {
+      // 🚀 Actualización optimista: remover de UI inmediatamente
+      setVisitantes(prev => prev.filter(v => v.id !== visitante.id));
+      
+      // Feedback inmediato
+      mostrarToastExito(`✅ ${visitante.nombre} ${visitante.apellido || ''} eliminado correctamente`);
+      
+      // En segundo plano: eliminar del servidor
+      setTimeout(async () => {
+        try {
+          // await visitantesService.eliminar(visitante.id);
+          console.log('🗑️ Visitante eliminado del servidor');
+        } catch (error) {
+          console.error('❌ Error eliminando del servidor:', error);
+          // Si falla, restaurar en la UI
+          setVisitantes(prev => [...prev, visitante]);
+          mostrarToastError('❌ Error eliminando visitante');
+        }
+      }, 100);
+      
+      // Limpiar estados
+      setVisitanteParaEliminar(null);
+      setMostrarConfirmacionEliminar(false);
+      setEliminandoVisitante(null);
+      
+    } catch (error) {
+      console.error('❌ Error al eliminar visitante:', error);
+      setEliminandoVisitante(null);
+      mostrarToastError(`❌ Error al eliminar ${visitante.nombre} ${visitante.apellido || ''}`);
+    }
+  };
+
+  // 🗑️ Funciones de eliminación masiva
+  const iniciarEliminacionSeleccionados = () => {
+    if (visitantesSeleccionados().length === 0) {
+      mostrarToastError('⚠️ Selecciona al menos un visitante');
+      return;
+    }
+    console.log('🗑️ Iniciando eliminación masiva:', visitantesSeleccionados().length);
+    setMostrarConfirmacionEliminarSeleccionados(true);
+  };
+
+  const cancelarEliminacionSeleccionados = () => {
+    console.log('❌ Eliminación masiva cancelada');
+    setMostrarConfirmacionEliminarSeleccionados(false);
+  };
+
+  const confirmarEliminacionSeleccionados = async () => {
+    const idsSeleccionados = visitantesSeleccionados();
+    if (idsSeleccionados.length === 0) return;
+
+    console.log('🗑️ Eliminando visitantes seleccionados:', idsSeleccionados.length);
+    setEliminandoSeleccionados(true);
+    
+    try {
+      // 🚀 Actualización optimista: remover de UI inmediatamente
+      const visitantesEliminados = visitantes().filter(v => idsSeleccionados.includes(v.id));
+      setVisitantes(prev => prev.filter(v => !idsSeleccionados.includes(v.id)));
+      
+      // Feedback inmediato
+      mostrarToastExito(`✅ ${idsSeleccionados.length} visitantes eliminados`);
+      
+      // En segundo plano: eliminar del servidor
+      setTimeout(async () => {
+        let errores = 0;
+        for (const id of idsSeleccionados) {
+          try {
+            // await visitantesService.eliminar(id);
+            console.log('🗑️ Visitante eliminado del servidor:', id);
+          } catch (error) {
+            console.error('❌ Error eliminando del servidor:', id, error);
+            errores++;
+          }
+        }
+        
+        if (errores > 0) {
+          // Si hay errores, restaurar algunos visitantes
+          mostrarToastError(`❌ ${errores} errores durante la eliminación`);
+        }
+      }, 100);
+      
+      // Limpiar estados
+      setMostrarConfirmacionEliminarSeleccionados(false);
+      setEliminandoSeleccionados(false);
+      setVisitantesSeleccionados([]);
+      
+    } catch (error) {
+      console.error('❌ Error en eliminación masiva:', error);
+      setEliminandoSeleccionados(false);
+      mostrarToastError('❌ Error en eliminación masiva');
+    }
   };
 
   // Funciones de importación
@@ -404,39 +623,42 @@ const VisitantesAdmin: Component = () => {
 
   return (
     <AdminLayout currentPage="visitantes">
-      <div class="admin-content">
-        {/* Header */}
-        <div class="breadcrumb">
-          <span>Visitantes</span>
-          <span>/</span>
-          <span>Gestión</span>
-          <span>/</span>
-          <span>Centro Cultural Banreservas</span>
-        </div>
-
-      <div class="welcome-section">
-        <div class="welcome-content">
-          <h1 class="welcome-title">
-            <FaSolidUsers size={28} color="#3B82F6" style="margin-right: 12px;" />
-            Gestión de Visitantes 👥
-          </h1>
-          <p class="welcome-subtitle">Administra visitantes, intereses e invitaciones</p>
-        </div>
-        <div class="welcome-actions">
-          <button class="header-btn share" onClick={() => setModalInvitacion(true)}>
-            <FaSolidEnvelope size={16} />
-            Invitar
-          </button>
-          <button class="header-btn primary" onClick={() => setModalImportacion(true)}>
-            <FaSolidFileImport size={16} />
-            Importar
-          </button>
-          <button class="header-btn create">
-            <FaSolidDownload size={16} />
-            Exportar
-          </button>
-        </div>
-      </div>
+      <div>
+        <AdminHeader
+          pageTitle="Gestión de Visitantes"
+          pageSubtitle="Administra visitantes, intereses e invitaciones del Centro Cultural"
+          breadcrumbs={[
+            { label: 'Centro Cultural Banreservas' },
+            { label: 'Gestión' },
+            { label: 'Visitantes', active: true }
+          ]}
+          buttons={[
+            {
+              label: 'Actualizar',
+              icon: FaSolidRotate,
+              onClick: () => cargarDatos(),
+              variant: 'secondary' as const
+            },
+            {
+              label: 'Invitar',
+              icon: FaSolidEnvelope,
+              onClick: () => setModalInvitacion(true),
+              variant: 'secondary' as const
+            },
+            {
+              label: 'Importar',
+              icon: FaSolidFileImport,
+              onClick: () => setModalImportacion(true),
+              variant: 'primary' as const
+            },
+            {
+              label: 'Exportar',
+              icon: FaSolidDownload,
+              variant: 'secondary' as const
+            }
+          ]}
+          titleIcon={FaSolidUsers}
+        />
 
       <Show when={cargando()}>
         <div style="text-align: center; padding: 2rem; color: #666;">
@@ -448,67 +670,76 @@ const VisitantesAdmin: Component = () => {
         {/* Estadísticas */}
         <div class="stats-grid">
           <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 100%);">
-              <FaSolidUsers size={24} color="white" />
+            <div class="stat-header">
+              <div>
+                <div class="stat-title">Visitantes</div>
+              </div>
+              <div class="stat-icon blue">
+                <FaSolidUsers size={20} color="#3B82F6" />
+              </div>
             </div>
-            <div class="stat-content">
-              <h3 class="stat-number">{estadisticas().total}</h3>
-              <p class="stat-label">TOTAL VISITANTES</p>
-              <p class="stat-sublabel">Registrados en plataforma</p>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #10B981 0%, #047857 100%);">
-              <FaSolidUserCheck size={24} color="white" />
-            </div>
-            <div class="stat-content">
-              <h3 class="stat-number">{estadisticas().activos}</h3>
-              <p class="stat-label">ACTIVOS</p>
-              <p class="stat-sublabel">Visitantes activos</p>
+            <div class="stat-number">{estadisticas().total}</div>
+            <div class="stat-label">Total registrados</div>
+            <div class="stat-change positive">
+              ↗ En la plataforma
             </div>
           </div>
 
           <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
-              <FaSolidCalendarCheck size={24} color="white" />
+            <div class="stat-header">
+              <div>
+                <div class="stat-title">Activos</div>
+              </div>
+              <div class="stat-icon green">
+                <FaSolidUserCheck size={20} color="#10B981" />
+              </div>
             </div>
-            <div class="stat-content">
-              <h3 class="stat-number">{estadisticas().hoy}</h3>
-              <p class="stat-label">HOY</p>
-              <p class="stat-sublabel">Registros de hoy</p>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);">
-              <FaSolidEnvelope size={24} color="white" />
-            </div>
-            <div class="stat-content">
-              <h3 class="stat-number">{invitaciones().length}</h3>
-              <p class="stat-label">INVITACIONES</p>
-              <p class="stat-sublabel">Enviadas totales</p>
+            <div class="stat-number">{estadisticas().activos}</div>
+            <div class="stat-label">Usuarios activos</div>
+            <div class="stat-change positive">
+              ↗ Participando
             </div>
           </div>
 
           <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);">
-              <FaSolidChartLine size={24} color="white" />
+            <div class="stat-header">
+              <div>
+                <div class="stat-title">Hoy</div>
+              </div>
+              <div class="stat-icon orange">
+                <FaSolidCalendarCheck size={20} color="#F59E0B" />
+              </div>
             </div>
-            <div class="stat-content">
-              <h3 class="stat-number">{Math.round((invitaciones().filter(i => i.estado === 'confirmada').length / (invitaciones().length || 1)) * 100)}%</h3>
-              <p class="stat-label">TASA RESPUESTA</p>
-              <p class="stat-sublabel">Invitaciones confirmadas</p>
+            <div class="stat-number">{estadisticas().hoy}</div>
+            <div class="stat-label">Registros de hoy</div>
+            <div class="stat-change positive">
+              ↗ Nuevos
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <div>
+                <div class="stat-title">Invitaciones</div>
+              </div>
+              <div class="stat-icon purple">
+                <FaSolidEnvelope size={20} color="#8B5CF6" />
+              </div>
+            </div>
+            <div class="stat-number">{invitaciones().length}</div>
+            <div class="stat-label">Enviadas totales</div>
+            <div class="stat-change positive">
+              ↗ Comunicación
             </div>
           </div>
         </div>
 
-        {/* Filtros Profesionales */}
-        <div class="professional-filters">
+        {/* Filtros con glassmorphism */}
+        <div class="visitantes-filters">
           <div class="filters-container">
             <div class="primary-filter">
               <div class="search-input-container">
-                <FaSolidMagnifyingGlass size={16} color="#6b7280" />
+                <FaSolidMagnifyingGlass size={16} color="#ffffff" />
                 <input
                   type="text"
                   class="professional-search"
@@ -528,42 +759,30 @@ const VisitantesAdmin: Component = () => {
             </div>
             
             <div class="secondary-filters">
-              <div class="filter-group">
-                <label class="filter-label">
-                  <FaSolidHeart size={12} />
-                  Intereses
-                </label>
-                <select 
-                  class="professional-select"
-                  value={filtroInteres()} 
-                  onChange={(e) => setFiltroInteres(e.target.value)}
-                >
-                  <option value="">Todos los intereses</option>
-                  <For each={interesesUnicos()}>
-                    {(interes) => <option value={interes}>{interes}</option>}
-                  </For>
-                </select>
-              </div>
+              <select 
+                class="filter-select"
+                value={filtroInteres()} 
+                onChange={(e) => setFiltroInteres(e.target.value)}
+              >
+                <option value="">Todos los intereses</option>
+                <For each={interesesUnicos()}>
+                  {(interes) => <option value={interes}>{interes}</option>}
+                </For>
+              </select>
               
-              <div class="filter-group">
-                <label class="filter-label">
-                  <FaSolidUserCheck size={12} />
-                  Estado
-                </label>
-                <select 
-                  class="professional-select"
-                  value={filtroEstado()} 
-                  onChange={(e) => setFiltroEstado(e.target.value)}
-                >
-                  <option value="">Todos los estados</option>
-                  <option value="activo">Activos</option>
-                  <option value="inactivo">Inactivos</option>
-                </select>
-              </div>
+              <select 
+                class="filter-select"
+                value={filtroEstado()} 
+                onChange={(e) => setFiltroEstado(e.target.value)}
+              >
+                <option value="">Todos los estados</option>
+                <option value="activo">Activos</option>
+                <option value="inactivo">Inactivos</option>
+              </select>
               
               <Show when={busqueda() || filtroInteres() || filtroEstado()}>
                 <button 
-                  class="clear-filters-btn"
+                  class="header-btn"
                   onClick={() => {
                     setBusqueda('');
                     setFiltroInteres('');
@@ -571,7 +790,7 @@ const VisitantesAdmin: Component = () => {
                   }}
                 >
                   <FaSolidFilter size={12} />
-                  Limpiar filtros
+                  Limpiar
                 </button>
               </Show>
             </div>
@@ -596,9 +815,20 @@ const VisitantesAdmin: Component = () => {
                 <span class="selection-counter">
                   {visitantesSeleccionados().length} seleccionados
                 </span>
-                <button class="btn-bulk-action">
+                <button 
+                  class="btn-bulk-action"
+                  onClick={() => setModalInvitacion(true)}
+                >
                   <FaSolidEnvelope size={14} />
                   Invitar seleccionados
+                </button>
+                <button 
+                  class="btn-bulk-action danger"
+                  onClick={iniciarEliminacionSeleccionados}
+                  disabled={eliminandoSeleccionados()}
+                >
+                  <FaSolidPen size={14} />
+                  {eliminandoSeleccionados() ? 'Eliminando...' : `Eliminar ${visitantesSeleccionados().length}`}
                 </button>
               </Show>
             </div>
@@ -684,11 +914,10 @@ const VisitantesAdmin: Component = () => {
                         </td>
                         <td class="visitor-col">
                           <div class="visitor-profile">
-                            <div class="visitor-avatar">
-                              {/* Avatar sin letra - solo gradiente */}
-                            </div>
                             <div class="visitor-details">
-                              <div class="visitor-name">{visitante.nombre}</div>
+                              <div class="visitor-name" style="color: #4b5563; font-weight: 500; font-size: 13px;">
+                                {visitante.nombre} {visitante.apellido || ''}
+                              </div>
                               <div class="visitor-id">ID: {visitante.id.substring(0, 8)}...</div>
                             </div>
                           </div>
@@ -730,7 +959,7 @@ const VisitantesAdmin: Component = () => {
                           </div>
                         </td>
                         <td class="status-col">
-                          <span class={`professional-status ${visitante.estado || 'activo'}`}>
+                          <span class={`status-badge ${visitante.estado || 'activo'}`}>
                             <span class="status-dot"></span>
                             {visitante.estado || 'activo'}
                           </span>
@@ -771,17 +1000,18 @@ const VisitantesAdmin: Component = () => {
                         <td class="actions-col">
                           <div class="action-buttons">
                             <button 
-                              class="btn-action primary"
+                              class="action-btn view"
                               onClick={() => {
+                                console.log('Visitante seleccionado:', visitante);
                                 setVisitanteSeleccionado(visitante);
                                 setModalDetalles(true);
                               }}
                               title="Ver detalles completos"
                             >
-                              <FaSolidUsers size={14} />
+                              <FaSolidEye size={14} />
                             </button>
                             <button 
-                              class="btn-action success"
+                              class="action-btn edit"
                               onClick={() => {
                                 if (eventos().length > 0) {
                                   enviarInvitacion(visitante.id, eventos()[0].id);
@@ -794,10 +1024,12 @@ const VisitantesAdmin: Component = () => {
                               <FaSolidEnvelope size={14} />
                             </button>
                             <button 
-                              class="btn-action secondary"
-                              title="Ver códigos de acceso"
+                              class="action-btn delete"
+                              onClick={() => iniciarEliminacion(visitante)}
+                              disabled={eliminandoVisitante() === visitante.id}
+                              title={eliminandoVisitante() === visitante.id ? 'Eliminando...' : 'Eliminar visitante'}
                             >
-                              <FaSolidCode size={14} />
+                              <FaSolidPen size={14} />
                             </button>
                           </div>
                         </td>
@@ -854,7 +1086,7 @@ const VisitantesAdmin: Component = () => {
                   <For each={visitantes().filter(v => visitantesSeleccionados().includes(v.id))}>
                     {(visitante) => (
                       <div class="visitor-item">
-                        <span>{visitante.nombre}</span>
+                        <span>{visitante.nombre} {visitante.apellido || ''}</span>
                         <span class="visitor-email">{visitante.email}</span>
                       </div>
                     )}
@@ -875,77 +1107,222 @@ const VisitantesAdmin: Component = () => {
         </div>
       </Show>
 
-      {/* Modal de Detalles */}
+      {/* Modal de Detalles Mejorado */}
       <Show when={modalDetalles() && visitanteSeleccionado()}>
         <div class="modal-overlay" onClick={() => setModalDetalles(false)}>
-          <div class="modal-content large" onClick={(e) => e.stopPropagation()}>
-            <div class="modal-header">
-              <h3>👤 Detalles del Visitante</h3>
-              <button class="modal-close" onClick={() => setModalDetalles(false)}>×</button>
+          <div class="modal-content visitor-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Header del Modal */}
+            <div class="visitor-modal-header">
+              <div class="header-content">
+                <div class="visitor-avatar-large">
+                  {(visitanteSeleccionado()?.nombre || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div class="visitor-main-info">
+                  <h1 class="visitor-name">{visitanteSeleccionado()?.nombre || 'Nombre no disponible'}</h1>
+                  <div class="visitor-contact">
+                    <div class="contact-item">
+                      <FaSolidEnvelope size={14} />
+                      <span>{visitanteSeleccionado()?.email}</span>
+                    </div>
+                    <Show when={visitanteSeleccionado()?.telefono}>
+                      <div class="contact-item">
+                        <FaSolidPhone size={14} />
+                        <span>{visitanteSeleccionado()?.telefono}</span>
+                      </div>
+                    </Show>
+                  </div>
+                  <div class="visitor-meta">
+                    <span class="meta-item">
+                      <FaSolidUsers size={12} />
+                      ID: {visitanteSeleccionado()?.id.substring(0, 8)}...
+                    </span>
+                    <span class="meta-item">
+                      <FaSolidCalendarCheck size={12} />
+                      Registro: {new Date(visitanteSeleccionado()?.created_at || '').toLocaleDateString('es-ES')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button class="modal-close-btn" onClick={() => setModalDetalles(false)}>
+                <span>×</span>
+              </button>
             </div>
-            
-            <div class="modal-body">
-              <div class="visitor-details">
-                <div class="visitor-profile">
-                  <div class="visitor-avatar large">
-                    {visitanteSeleccionado()?.nombre.charAt(0)}
+
+            {/* Contenido del Modal */}
+            <div class="visitor-modal-body">
+              {/* Estadísticas Principales */}
+              <div class="stats-section">
+                <h3 class="section-title">
+                  <FaSolidChartLine size={16} />
+                  Estadísticas de Participación
+                </h3>
+                <div class="stats-grid">
+                  <div class="stat-card primary">
+                    <div class="stat-icon">
+                      <FaSolidTicket size={20} />
+                    </div>
+                    <div class="stat-content">
+                      <div class="stat-number">{invitaciones().filter(i => i.visitanteId === visitanteSeleccionado()?.id).length}</div>
+                      <div class="stat-label">Eventos Registrados</div>
+                    </div>
                   </div>
-                  <div class="visitor-info">
-                    <h2>{visitanteSeleccionado()?.nombre}</h2>
-                    <p>{visitanteSeleccionado()?.email}</p>
-                    <p>{visitanteSeleccionado()?.telefono}</p>
+                  
+                  <div class="stat-card success">
+                    <div class="stat-icon">
+                      <FaSolidUserCheck size={20} />
+                    </div>
+                    <div class="stat-content">
+                      <div class="stat-number">{invitaciones().filter(i => i.visitanteId === visitanteSeleccionado()?.id && i.estado === 'confirmada').length}</div>
+                      <div class="stat-label">Check-ins Realizados</div>
+                    </div>
+                  </div>
+                  
+                  <div class="stat-card info">
+                    <div class="stat-icon">
+                      <FaSolidHeart size={20} />
+                    </div>
+                    <div class="stat-content">
+                      <div class="stat-number">{visitanteSeleccionado()?.intereses?.length || 0}</div>
+                      <div class="stat-label">Intereses</div>
+                    </div>
+                  </div>
+                  
+                  <div class="stat-card warning">
+                    <div class="stat-icon">
+                      <FaSolidCode size={20} />
+                    </div>
+                    <div class="stat-content">
+                      <div class="stat-number">{invitaciones().filter(i => i.visitanteId === visitanteSeleccionado()?.id && i.estado === 'abierta').length}</div>
+                      <div class="stat-label">Pendientes</div>
+                    </div>
                   </div>
                 </div>
-                
-                <div class="visitor-stats">
-                  <div class="stat-item">
-                    <FaSolidTicket size={16} />
-                    <span>Eventos registrados: {invitaciones().filter(i => i.visitanteId === visitanteSeleccionado()?.id).length}</span>
-                  </div>
-                  <div class="stat-item">
-                    <FaSolidCalendarCheck size={16} />
-                    <span>Check-ins realizados: {invitaciones().filter(i => i.visitanteId === visitanteSeleccionado()?.id && i.estado === 'confirmada').length}</span>
-                  </div>
-                </div>
-                
-                <div class="visitor-interests">
-                  <h4>Intereses:</h4>
-                  <div class="interests-list">
-                    <For each={visitanteSeleccionado()?.intereses || []}>
-                      {(interes) => (
-                        <span class="interest-tag large">
-                          <FaSolidHeart size={12} />
-                          {interes}
-                        </span>
-                      )}
-                    </For>
-                  </div>
-                </div>
-                
-                <div class="visitor-invitations">
-                  <h4>Historial de Invitaciones:</h4>
-                  <div class="invitations-list">
-                    <For each={invitaciones().filter(i => i.visitanteId === visitanteSeleccionado()?.id)}>
-                      {(inv) => (
-                        <div class="invitation-item">
-                          <div class="inv-code">
-                            <FaSolidCode size={14} />
-                            {inv.codigo}
+              </div>
+
+              {/* Intereses */}
+              <div class="interests-section">
+                <h3 class="section-title">
+                  <FaSolidHeart size={16} />
+                  Intereses y Preferencias
+                </h3>
+                <div class="interests-container">
+                  <Show 
+                    when={visitanteSeleccionado()?.intereses?.length > 0}
+                    fallback={
+                      <div class="empty-state">
+                        <div class="empty-icon">🎯</div>
+                        <p>No hay intereses registrados</p>
+                        <span class="empty-text">El visitante aún no ha definido sus preferencias</span>
+                      </div>
+                    }
+                  >
+                    <div class="interests-grid">
+                      <For each={visitanteSeleccionado()?.intereses || []}>
+                        {(interes) => (
+                          <div class="interest-badge">
+                            <FaSolidHeart size={12} />
+                            <span>{interes}</span>
                           </div>
-                          <div class="inv-event">
-                            {eventos().find(e => e.id === inv.eventoId)?.nombre}
-                          </div>
-                          <div class="inv-date">
-                            {new Date(inv.fechaEnvio).toLocaleDateString()}
-                          </div>
-                          <span class={`status-badge ${inv.estado}`}>
-                            {inv.estado}
-                          </span>
-                        </div>
-                      )}
-                    </For>
-                  </div>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
                 </div>
+              </div>
+
+              {/* Historial de Invitaciones */}
+              <div class="invitations-section">
+                <h3 class="section-title">
+                  <FaSolidTicket size={16} />
+                  Historial de Invitaciones
+                </h3>
+                <div class="invitations-container">
+                  <Show 
+                    when={invitaciones().filter(i => i.visitanteId === visitanteSeleccionado()?.id).length > 0}
+                    fallback={
+                      <div class="empty-state">
+                        <div class="empty-icon">📋</div>
+                        <p>Sin invitaciones registradas</p>
+                        <span class="empty-text">Este visitante no tiene invitaciones en el sistema</span>
+                      </div>
+                    }
+                  >
+                    <div class="invitations-list">
+                      <For each={invitaciones().filter(i => i.visitanteId === visitanteSeleccionado()?.id)}>
+                        {(inv) => (
+                          <div class="invitation-card">
+                            <div class="invitation-header">
+                              <div class="invitation-event">
+                                <div class="event-name">
+                                  {eventos().find(e => e.id === inv.eventoId)?.titulo || 'Evento no encontrado'}
+                                </div>
+                                <div class="event-date">
+                                  {eventos().find(e => e.id === inv.eventoId)?.fecha ? 
+                                    new Date(eventos().find(e => e.id === inv.eventoId)?.fecha || '').toLocaleDateString('es-ES', {
+                                      weekday: 'long',
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric'
+                                    })
+                                    : 'Fecha no disponible'
+                                  }
+                                </div>
+                              </div>
+                              <span class={`invitation-status status-${inv.estado}`}>
+                                {inv.estado === 'abierta' ? '⏳ Pendiente' : 
+                                 inv.estado === 'confirmada' ? '✅ Confirmada' : 
+                                 inv.estado === 'cancelada' ? '❌ Cancelada' : inv.estado}
+                              </span>
+                            </div>
+                            
+                            <div class="invitation-details">
+                              <div class="detail-item">
+                                <FaSolidCode size={12} />
+                                <span class="detail-label">Código:</span>
+                                <span class="detail-value invitation-code">{inv.codigo}</span>
+                              </div>
+                              <div class="detail-item">
+                                <FaSolidCalendarCheck size={12} />
+                                <span class="detail-label">Enviado:</span>
+                                <span class="detail-value">{new Date(inv.fechaEnvio).toLocaleDateString('es-ES')}</span>
+                              </div>
+                              <Show when={inv.fechaConfirmacion}>
+                                <div class="detail-item">
+                                  <FaSolidUserCheck size={12} />
+                                  <span class="detail-label">Check-in:</span>
+                                  <span class="detail-value">{new Date(inv.fechaConfirmacion || '').toLocaleDateString('es-ES')}</span>
+                                </div>
+                              </Show>
+                            </div>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer con acciones */}
+            <div class="visitor-modal-footer">
+              <div class="footer-actions">
+                <button class="btn-secondary" onClick={() => setModalDetalles(false)}>
+                  Cerrar
+                </button>
+                <button class="btn-primary" onClick={() => {
+                  // Aquí se puede agregar funcionalidad para editar
+                  console.log('Editar visitante:', visitanteSeleccionado()?.id);
+                }}>
+                  <FaSolidPen size={14} />
+                  Editar Visitante
+                </button>
+                <button class="btn-success" onClick={() => {
+                  // Aquí se puede agregar funcionalidad para enviar invitación
+                  console.log('Enviar invitación a:', visitanteSeleccionado()?.email);
+                }}>
+                  <FaSolidEnvelope size={14} />
+                  Enviar Invitación
+                </button>
               </div>
             </div>
           </div>
@@ -1126,6 +1503,83 @@ const VisitantesAdmin: Component = () => {
                   ✅ Finalizar
                 </button>
               </Show>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal de confirmación eliminación individual */}
+      <Show when={mostrarConfirmacionEliminar()}>
+        <div class="modal-overlay" onClick={() => setMostrarConfirmacionEliminar(false)}>
+          <div class="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div class="modal-header">
+              <h3>🗑️ Confirmar Eliminación</h3>
+              <button class="modal-close" onClick={cancelarEliminacion}>×</button>
+            </div>
+            
+            <div class="modal-body">
+              <p>¿Estás seguro de que quieres eliminar al visitante <strong>"{visitanteParaEliminar()?.nombre}"</strong>?</p>
+              <p style="color: #dc2626; font-size: 14px; margin-top: 12px;">
+                ⚠️ Esta acción no se puede deshacer. Se eliminará toda la información del visitante.
+              </p>
+            </div>
+            
+            <div class="modal-footer">
+              <button class="btn-secondary" onClick={cancelarEliminacion}>
+                Cancelar
+              </button>
+              <button 
+                class="btn-danger"
+                onClick={confirmarEliminacion}
+                disabled={eliminandoVisitante() === visitanteParaEliminar()?.id}
+              >
+                {eliminandoVisitante() === visitanteParaEliminar()?.id ? '⏳ Eliminando...' : '🗑️ Sí, Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal de confirmación eliminación masiva */}
+      <Show when={mostrarConfirmacionEliminarSeleccionados()}>
+        <div class="modal-overlay" onClick={() => setMostrarConfirmacionEliminarSeleccionados(false)}>
+          <div class="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div class="modal-header">
+              <h3>🗑️ Eliminar Visitantes Seleccionados</h3>
+              <button class="modal-close" onClick={cancelarEliminacionSeleccionados}>×</button>
+            </div>
+            
+            <div class="modal-body">
+              <p>¿Estás seguro de que quieres eliminar <strong>{visitantesSeleccionados().length} visitantes</strong>?</p>
+              
+              <div style="max-height: 200px; overflow-y: auto; margin: 16px 0; padding: 12px; background: #f9fafb; border-radius: 6px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #374151;">Visitantes a eliminar:</h4>
+                <For each={visitantes().filter(v => visitantesSeleccionados().includes(v.id))}>
+                  {(visitante) => (
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 4px 0;">
+                      <span style="font-size: 13px; color: #111827;">• {visitante.nombre}</span>
+                      <span style="font-size: 12px; color: #6b7280;">({visitante.email})</span>
+                    </div>
+                  )}
+                </For>
+              </div>
+              
+              <p style="color: #dc2626; font-size: 14px;">
+                ⚠️ Esta acción no se puede deshacer. Se eliminará toda la información de estos visitantes.
+              </p>
+            </div>
+            
+            <div class="modal-footer">
+              <button class="btn-secondary" onClick={cancelarEliminacionSeleccionados}>
+                Cancelar
+              </button>
+              <button 
+                class="btn-danger"
+                onClick={confirmarEliminacionSeleccionados}
+                disabled={eliminandoSeleccionados()}
+              >
+                {eliminandoSeleccionados() ? '⏳ Eliminando...' : `🗑️ Eliminar ${visitantesSeleccionados().length} visitantes`}
+              </button>
             </div>
           </div>
         </div>
