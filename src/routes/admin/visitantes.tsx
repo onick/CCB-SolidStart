@@ -438,38 +438,56 @@ const VisitantesAdmin: Component = () => {
     const visitante = visitanteParaEliminar();
     if (!visitante) return;
 
-    console.log('🗑️ Eliminando visitante:', `${visitante.nombre} ${visitante.apellido || ''}`);
+    console.log('🗑️ [OPTIMISTIC] Eliminando visitante de UI:', `${visitante.nombre} ${visitante.apellido || ''}`);
     setEliminandoVisitante(visitante.id);
     
+    // 🚀 ACTUALIZACIÓN OPTIMISTA: Eliminar de la UI inmediatamente
+    const visitantesOriginales = visitantes();
+    setVisitantes(prev => prev.filter(v => v.id !== visitante.id));
+    
+    // Limpiar modal inmediatamente
+    setVisitanteParaEliminar(null);
+    setMostrarConfirmacionEliminar(false);
+    
+    // Mostrar toast de éxito optimista
+    mostrarToastExito(`✅ ${visitante.nombre} ${visitante.apellido || ''} eliminado`);
+    
     try {
-      // 🚀 Actualización optimista: remover de UI inmediatamente
-      setVisitantes(prev => prev.filter(v => v.id !== visitante.id));
+      // Sincronizar con servidor en segundo plano
+      console.log('📡 Sincronizando eliminación con servidor...');
+      const eliminado = await visitantesService.eliminar(visitante.id);
       
-      // Feedback inmediato
-      mostrarToastExito(`✅ ${visitante.nombre} ${visitante.apellido || ''} eliminado correctamente`);
-      
-      // En segundo plano: eliminar del servidor
-      setTimeout(async () => {
+      if (eliminado) {
+        console.log('✅ Visitante eliminado del servidor exitosamente');
+        setEliminandoVisitante(null);
+        
+        // Actualizar estadísticas después de eliminación exitosa
         try {
-          // await visitantesService.eliminar(visitante.id);
-          console.log('🗑️ Visitante eliminado del servidor');
-        } catch (error) {
-          console.error('❌ Error eliminando del servidor:', error);
-          // Si falla, restaurar en la UI
-          setVisitantes(prev => [...prev, visitante]);
-          mostrarToastError('❌ Error eliminando visitante');
+          const nuevasEstadisticas = await visitantesService.obtenerEstadisticas();
+          setEstadisticas({
+            total: nuevasEstadisticas.total,
+            activos: nuevasEstadisticas.activos,
+            hoy: nuevasEstadisticas.hoy,
+            estaSemana: nuevasEstadisticas.estaSemana,
+            invitacionesEnviadas: estadisticas().invitacionesEnviadas,
+            tasaRespuesta: estadisticas().tasaRespuesta
+          });
+        } catch (statsError) {
+          console.error('⚠️ Error actualizando estadísticas:', statsError);
         }
-      }, 100);
-      
-      // Limpiar estados
-      setVisitanteParaEliminar(null);
-      setMostrarConfirmacionEliminar(false);
-      setEliminandoVisitante(null);
+      } else {
+        throw new Error('No se pudo eliminar el visitante del servidor');
+      }
       
     } catch (error) {
-      console.error('❌ Error al eliminar visitante:', error);
+      console.error('❌ Error al eliminar del servidor, revirtiendo...', error);
+      
+      // 🔄 REVERTIR: Restaurar el visitante en la UI
+      setVisitantes(visitantesOriginales);
       setEliminandoVisitante(null);
-      mostrarToastError(`❌ Error al eliminar ${visitante.nombre} ${visitante.apellido || ''}`);
+      
+      // Mostrar toast de error y reversión
+      mostrarToastError(`❌ Error al eliminar "${visitante.nombre} ${visitante.apellido || ''}" - acción revertida`);
     }
   };
 
@@ -492,45 +510,69 @@ const VisitantesAdmin: Component = () => {
     const idsSeleccionados = visitantesSeleccionados();
     if (idsSeleccionados.length === 0) return;
 
-    console.log('🗑️ Eliminando visitantes seleccionados:', idsSeleccionados.length);
+    console.log('🗑️ [OPTIMISTIC] Eliminando visitantes seleccionados de UI:', idsSeleccionados.length);
     setEliminandoSeleccionados(true);
     
+    // 🚀 ACTUALIZACIÓN OPTIMISTA: Eliminar de la UI inmediatamente
+    const visitantesOriginales = visitantes();
+    const visitantesEliminados = visitantes().filter(v => idsSeleccionados.includes(v.id));
+    setVisitantes(prev => prev.filter(v => !idsSeleccionados.includes(v.id)));
+    
+    // Limpiar estados del modal y selecciones inmediatamente
+    setMostrarConfirmacionEliminarSeleccionados(false);
+    setVisitantesSeleccionados([]);
+    
+    // Mostrar toast de éxito optimista
+    mostrarToastExito(`✅ ${idsSeleccionados.length} visitantes eliminados`);
+    
     try {
-      // 🚀 Actualización optimista: remover de UI inmediatamente
-      const visitantesEliminados = visitantes().filter(v => idsSeleccionados.includes(v.id));
-      setVisitantes(prev => prev.filter(v => !idsSeleccionados.includes(v.id)));
+      // Sincronizar con servidor en segundo plano
+      console.log('📡 Sincronizando eliminación masiva con servidor...');
+      const resultados = await Promise.allSettled(
+        idsSeleccionados.map(id => visitantesService.eliminar(id))
+      );
       
-      // Feedback inmediato
-      mostrarToastExito(`✅ ${idsSeleccionados.length} visitantes eliminados`);
+      // Contar éxitos y errores
+      const eliminacionesExitosas = resultados.filter(r => r.status === 'fulfilled' && r.value === true);
+      const errores = resultados.length - eliminacionesExitosas.length;
       
-      // En segundo plano: eliminar del servidor
-      setTimeout(async () => {
-        let errores = 0;
-        for (const id of idsSeleccionados) {
-          try {
-            // await visitantesService.eliminar(id);
-            console.log('🗑️ Visitante eliminado del servidor:', id);
-          } catch (error) {
-            console.error('❌ Error eliminando del servidor:', id, error);
-            errores++;
-          }
-        }
+      if (eliminacionesExitosas.length === idsSeleccionados.length) {
+        console.log('✅ Todas las eliminaciones fueron exitosas');
+        setEliminandoSeleccionados(false);
         
-        if (errores > 0) {
-          // Si hay errores, restaurar algunos visitantes
-          mostrarToastError(`❌ ${errores} errores durante la eliminación`);
+        // Actualizar estadísticas después de eliminación exitosa
+        try {
+          const nuevasEstadisticas = await visitantesService.obtenerEstadisticas();
+          setEstadisticas({
+            total: nuevasEstadisticas.total,
+            activos: nuevasEstadisticas.activos,
+            hoy: nuevasEstadisticas.hoy,
+            estaSemana: nuevasEstadisticas.estaSemana,
+            invitacionesEnviadas: estadisticas().invitacionesEnviadas,
+            tasaRespuesta: estadisticas().tasaRespuesta
+          });
+        } catch (statsError) {
+          console.error('⚠️ Error actualizando estadísticas:', statsError);
         }
-      }, 100);
-      
-      // Limpiar estados
-      setMostrarConfirmacionEliminarSeleccionados(false);
-      setEliminandoSeleccionados(false);
-      setVisitantesSeleccionados([]);
+      } else if (eliminacionesExitosas.length > 0) {
+        // Eliminación parcial - algunos fallos
+        console.log(`⚠️ Eliminación parcial: ${eliminacionesExitosas.length}/${idsSeleccionados.length} exitosas`);
+        setEliminandoSeleccionados(false);
+        mostrarToastError(`⚠️ Solo ${eliminacionesExitosas.length} de ${idsSeleccionados.length} visitantes pudieron eliminarse`);
+      } else {
+        // Fallo total - revertir todo
+        throw new Error('No se pudo eliminar ningún visitante del servidor');
+      }
       
     } catch (error) {
-      console.error('❌ Error en eliminación masiva:', error);
+      console.error('❌ Error en eliminación masiva, revirtiendo...', error);
+      
+      // 🔄 REVERTIR: Restaurar todos los visitantes en la UI
+      setVisitantes(visitantesOriginales);
       setEliminandoSeleccionados(false);
-      mostrarToastError('❌ Error en eliminación masiva');
+      
+      // Mostrar toast de error y reversión
+      mostrarToastError(`❌ Error en eliminación masiva - acción revertida`);
     }
   };
 
