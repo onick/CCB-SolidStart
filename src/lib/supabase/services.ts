@@ -471,6 +471,86 @@ export const visitantesService = {
       hoy: data.filter(v => new Date(v.fecha_registro).toDateString() === hoy).length,
       estaSemana: data.filter(v => new Date(v.fecha_registro) >= inicioSemana).length
     };
+  },
+
+  // Eliminar un visitante
+  async eliminar(id: string): Promise<boolean> {
+    if (!isSupabaseConfigured()) {
+      console.log(`🗑️ Simulando eliminación de visitante mock: ${id}`);
+      return true;
+    }
+
+    const { error } = await supabase
+      .from('visitantes')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error eliminando visitante:', error);
+      return false;
+    }
+    
+    console.log(`✅ Visitante ${id} eliminado de Supabase`);
+    return true;
+  },
+
+  async crearLote(visitantes: Omit<Visitante, 'id' | 'created_at' | 'updated_at'>[]): Promise<{ exitosos: number; errores: number; detalles: string[] }> {
+    const resultado = {
+      exitosos: 0,
+      errores: 0,
+      detalles: [] as string[]
+    };
+
+    try {
+      // Procesar visitantes en lotes de 100
+      const tamanoLote = 100;
+      const lotes = [];
+      
+      for (let i = 0; i < visitantes.length; i += tamanoLote) {
+        const lote = visitantes.slice(i, i + tamanoLote).map(v => {
+          // Generar código único con formato CCB-XXXXX
+          const codigoUnico = `CCB-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+          
+          return {
+            nombre: v.nombre?.substring(0, 100) || '',
+            apellido: v.apellido?.substring(0, 100) || '',
+            email: v.email?.toLowerCase().substring(0, 255) || '',
+            telefono: v.telefono?.replace(/[^\d+\-\s()]/g, '').substring(0, 50) || '',
+            cedula: v.cedula?.replace(/[^\d\-]/g, '').substring(0, 50) || null,
+            codigo_qr: null,
+            codigo_unico: codigoUnico,
+            fecha_registro: new Date().toISOString(),
+            estado: 'activo' as const,
+            evento_id: null,
+            intereses: Array.isArray(v.intereses) ? v.intereses : []
+          };
+        });
+        lotes.push(lote);
+      }
+
+      // Procesar cada lote
+      for (const lote of lotes) {
+        const { data, error } = await supabase
+          .from('visitantes')
+          .insert(lote)
+          .select();
+
+        if (error) {
+          console.error('Error en lote:', error);
+          resultado.errores += lote.length;
+          resultado.detalles.push(`Error en lote: ${error.message}`);
+        } else if (data) {
+          resultado.exitosos += data.length;
+          resultado.detalles.push(`✅ Lote procesado: ${data.length} visitantes`);
+        }
+      }
+    } catch (error) {
+      console.error('Error en importación masiva:', error);
+      resultado.errores = visitantes.length;
+      resultado.detalles.push(`❌ Error inesperado: ${error.message}`);
+    }
+
+    return resultado;
   }
 };
 
@@ -486,19 +566,17 @@ export const eventosService = {
       // 1. Intentar obtener desde cache en memoria (navegador)
       const cached = getFromCache(cacheKey);
       if (cached) {
-        console.log('🚀 Cache HIT - Memoria');
         return cached;
       }
 
       // 2. Cache MISS - Buscar en Supabase
-      console.log('💾 Cache MISS - Fetching from Supabase');
       const { data, error } = await supabase
         .from('eventos')
         .select('*')
         .order('fecha', { ascending: true });
       
       if (error) {
-        console.error('❌ Error obteniendo eventos de Supabase:', error);
+        console.error('Error obteniendo eventos:', error);
         return [];
       }
 
@@ -507,14 +585,12 @@ export const eventosService = {
       // 3. Guardar en cache en memoria
       if (eventos.length > 0) {
         setCache(cacheKey, eventos);
-        console.log(`💾 Cached en memoria: ${eventos.length} eventos`);
       }
 
-      console.log(`✅ ${eventos.length} eventos obtenidos desde Supabase`);
       return eventos;
       
     } catch (error) {
-      console.error('❌ Error general en obtenerTodos:', error);
+      console.error('Error general en obtenerTodos:', error);
       return [];
     }
   },
@@ -542,7 +618,6 @@ export const eventosService = {
 
   async crear(evento: Omit<Evento, 'id' | 'created_at' | 'updated_at'>): Promise<Evento | null> {
     try {
-      // 1. Crear evento en Supabase
       const { data, error } = await supabase
         .from('eventos')
         .insert([evento])
@@ -550,46 +625,20 @@ export const eventosService = {
         .single();
       
       if (error) {
-        console.error('❌ Error creando evento:', error);
+        console.error('Error creando evento:', error);
         throw error;
       }
 
-      // 2. Invalidar cache en memoria
       invalidateCache('eventos');
-      console.log('🗑️ Cache de eventos invalidado');
-      
-      console.log('✅ Evento creado y cache invalidado:', data.titulo);
       return data;
       
     } catch (error) {
-      console.error('❌ Error en crear evento:', error);
+      console.error('Error en crear evento:', error);
       throw error;
     }
   },
 
   async actualizar(id: string, evento: Partial<Evento>): Promise<Evento | null> {
-    // Si Supabase no está configurado, simular actualización en mock
-    if (!isSupabaseConfigured()) {
-      console.log('🧪 Simulando actualización de evento en datos mock');
-      const index = eventosMockDinamicos.findIndex(e => e.id === id);
-      if (index !== -1) {
-        eventosMockDinamicos[index] = {
-          ...eventosMockDinamicos[index],
-          ...evento,
-          updated_at: new Date().toISOString()
-        };
-        guardarEventosEnStorage(eventosMockDinamicos); // 💾 Guardar en localStorage
-        
-        // ✅ INVALIDAR CACHE PARA SINCRONIZACIÓN CON EVENTOS-PÚBLICOS
-        invalidateCache('eventos');
-        console.log('🔄 Cache invalidado tras actualización mock - Sincronización automática');
-        
-        console.log('✅ Evento mock actualizado y guardado:', eventosMockDinamicos[index].titulo);
-        return eventosMockDinamicos[index];
-      }
-      return null;
-    }
-
     const { data, error } = await supabase
       .from('eventos')
       .update({
@@ -605,10 +654,7 @@ export const eventosService = {
       return null;
     }
     
-    // ✅ INVALIDAR CACHE PARA SINCRONIZACIÓN CON EVENTOS-PÚBLICOS
     invalidateCache('eventos');
-    console.log('🔄 Cache invalidado tras actualización de evento - Sincronización automática');
-    
     return data;
   },
 
@@ -653,36 +699,17 @@ export const eventosService = {
 
   // Eliminar un evento
   async eliminar(id: string): Promise<boolean> {
-    if (!isSupabaseConfigured()) {
-      console.log(`🗑️ Eliminando evento mock: ${id}`);
-      
-      const eventoIndex = eventosMockDinamicos.findIndex(e => e.id === id);
-      if (eventoIndex === -1) {
-        console.warn(`⚠️ Evento ${id} no encontrado para eliminar`);
-        return false;
-      }
-      
-      // Eliminar el evento del array
-      eventosMockDinamicos.splice(eventoIndex, 1);
-      
-      // Guardar cambios en localStorage
-      guardarEventosEnStorage(eventosMockDinamicos);
-      console.log(`✅ Evento ${id} eliminado exitosamente`);
-      return true;
-    }
-
-    // Implementación para Supabase
     const { error } = await supabase
       .from('eventos')
       .delete()
       .eq('id', id);
-    
+
     if (error) {
       console.error('Error eliminando evento:', error);
       return false;
     }
-    
-    console.log(`✅ Evento ${id} eliminado de Supabase`);
+
+    invalidateCache('eventos');
     return true;
   },
 
