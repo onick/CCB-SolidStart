@@ -80,6 +80,10 @@ const VisitantesAdmin: Component = () => {
     detalles: string[];
   } | null>(null);
   
+  // 📄 Estados de paginación
+  const [paginaActual, setPaginaActual] = createSignal(1);
+  const [elementosPorPagina, setElementosPorPagina] = createSignal(10);
+  
   // Estadísticas
   const [estadisticas, setEstadisticas] = createSignal({
     total: 0,
@@ -97,6 +101,15 @@ const VisitantesAdmin: Component = () => {
     setInterval(() => {
       cargarDatosSilencioso();
     }, 30000);
+  });
+
+  // 🔄 Efectos reactivos para resetear paginación
+  createEffect(() => {
+    // Resetear a página 1 cuando cambian los filtros
+    const _ = busqueda(); // Crear dependencia
+    const __ = filtroInteres(); // Crear dependencia
+    const ___ = filtroEstado(); // Crear dependencia
+    resetearPaginacion();
   });
 
   const cargarDatos = async () => {
@@ -203,6 +216,31 @@ const VisitantesAdmin: Component = () => {
     }
     
     return filtrados;
+  };
+
+  // 📄 Funciones de paginación
+  const totalPaginas = () => Math.ceil(visitantesFiltrados().length / elementosPorPagina());
+  
+  const visitantesPaginados = () => {
+    const inicio = (paginaActual() - 1) * elementosPorPagina();
+    const fin = inicio + elementosPorPagina();
+    return visitantesFiltrados().slice(inicio, fin);
+  };
+
+  const cambiarPagina = (nuevaPagina: number) => {
+    if (nuevaPagina >= 1 && nuevaPagina <= totalPaginas()) {
+      setPaginaActual(nuevaPagina);
+    }
+  };
+
+  const cambiarElementosPorPagina = (nuevosElementos: number) => {
+    setElementosPorPagina(nuevosElementos);
+    setPaginaActual(1); // Resetear a primera página
+  };
+
+  // 🔄 Resetear paginación cuando cambian los filtros
+  const resetearPaginacion = () => {
+    setPaginaActual(1);
   };
 
   // Intereses únicos para el filtro
@@ -897,7 +935,7 @@ const VisitantesAdmin: Component = () => {
                 </tr>
               </thead>
               <tbody>
-                <For each={visitantesFiltrados()}>
+                <For each={visitantesPaginados()}>
                   {(visitante) => {
                     const invitacionesVisitante = invitaciones().filter(i => i.visitanteId === visitante.id);
                     const isSelected = visitantesSeleccionados().includes(visitante.id);
@@ -1039,6 +1077,86 @@ const VisitantesAdmin: Component = () => {
                 </For>
               </tbody>
             </table>
+            
+            {/* 📄 Controles de Paginación */}
+            <Show when={visitantesFiltrados().length > 0}>
+              <div class="pagination-container">
+                <div class="pagination-info">
+                  <span class="results-summary">
+                    Mostrando {((paginaActual() - 1) * elementosPorPagina()) + 1} - {Math.min(paginaActual() * elementosPorPagina(), visitantesFiltrados().length)} de {visitantesFiltrados().length} visitantes
+                  </span>
+                  
+                  <div class="items-per-page">
+                    <span>Mostrar:</span>
+                    <select 
+                      value={elementosPorPagina()}
+                      onChange={(e) => cambiarElementosPorPagina(Number(e.target.value))}
+                      class="pagination-select"
+                    >
+                      <option value={5}>5 por página</option>
+                      <option value={10}>10 por página</option>
+                      <option value={25}>25 por página</option>
+                      <option value={50}>50 por página</option>
+                      <option value={100}>100 por página</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <Show when={totalPaginas() > 1}>
+                  <div class="pagination-controls">
+                    {/* Botón Anterior */}
+                    <button 
+                      class="pagination-btn"
+                      disabled={paginaActual() === 1}
+                      onClick={() => cambiarPagina(paginaActual() - 1)}
+                    >
+                      ‹ Anterior
+                    </button>
+                    
+                    {/* Números de página */}
+                    <div class="page-numbers">
+                      <Show when={paginaActual() > 3}>
+                        <button class="pagination-btn" onClick={() => cambiarPagina(1)}>1</button>
+                        <Show when={paginaActual() > 4}>
+                          <span class="pagination-dots">...</span>
+                        </Show>
+                      </Show>
+                      
+                      <For each={Array.from({length: totalPaginas()}, (_, i) => i + 1).filter(page => 
+                        Math.abs(page - paginaActual()) <= 2
+                      )}>
+                        {(page) => (
+                          <button 
+                            class={`pagination-btn ${page === paginaActual() ? 'active' : ''}`}
+                            onClick={() => cambiarPagina(page)}
+                          >
+                            {page}
+                          </button>
+                        )}
+                      </For>
+                      
+                      <Show when={paginaActual() < totalPaginas() - 2}>
+                        <Show when={paginaActual() < totalPaginas() - 3}>
+                          <span class="pagination-dots">...</span>
+                        </Show>
+                        <button class="pagination-btn" onClick={() => cambiarPagina(totalPaginas())}>
+                          {totalPaginas()}
+                        </button>
+                      </Show>
+                    </div>
+                    
+                    {/* Botón Siguiente */}
+                    <button 
+                      class="pagination-btn"
+                      disabled={paginaActual() === totalPaginas()}
+                      onClick={() => cambiarPagina(paginaActual() + 1)}
+                    >
+                      Siguiente ›
+                    </button>
+                  </div>
+                </Show>
+              </div>
+            </Show>
             
             <Show when={visitantesFiltrados().length === 0}>
               <div class="empty-state">
