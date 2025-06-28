@@ -3,7 +3,7 @@ import type { Evento, FormularioRegistro, FiltroEvento } from '../types/eventos'
 import { eventosService, registroEventosService, visitantesService, forceInvalidateCache } from '../lib/supabase/services';
 import { filtrarEventos, getCurrentTime } from '../utils/eventHelpers';
 import { validarFormulario } from '../utils/validators';
-import { generateEventCode } from '../utils/codeGenerator';
+import { generateEventCode, generateUniqueEventCode } from '../utils/codeGenerator';
 
 // Componentes modulares
 import Header from '../components/eventos/Header';
@@ -137,39 +137,58 @@ const EventosPublicos: Component = () => {
     // Sincronizar con servicios administrativos
     sincronizarRegistroConAdmin(nuevoRegistro, eventoId);
     
-    // Actualizar contador
-    actualizarContadorEventos(eventoId);
+    // 🔧 CORRECCIÓN: NO incrementar contador aquí - se hará solo si Supabase tiene éxito
+    // actualizarContadorEventos(eventoId); // REMOVIDO para evitar duplicación
   };
 
   const sincronizarRegistroConAdmin = async (registro: any, eventoId: string) => {
     try {
       console.log('🔄 Sincronizando registro con servicios administrativos...', registro);
       
-      // PASO 1: Crear/buscar visitante en Supabase
-      const visitanteData = {
-        nombre: registro.nombre,
-        apellido: '',
-        email: registro.email,
-        telefono: registro.telefono || '',
-        codigo_unico: registro.codigo,
-        fecha_registro: new Date().toISOString(),
-      };
+      // CORRECCIÓN: Verificar si ya existe el visitante primero
+      const visitanteExistente = await visitantesService.buscarPorEmail(registro.email);
+      let visitanteCreado = visitanteExistente;
       
-      const visitanteCreado = await visitantesService.crear(visitanteData);
-      console.log('✅ Visitante sincronizado:', visitanteCreado?.email);
+      if (!visitanteExistente) {
+        // PASO 1: Crear visitante solo si no existe
+        const visitanteData = {
+          nombre: registro.nombre,
+          apellido: '',
+          email: registro.email,
+          telefono: registro.telefono || '',
+          codigo_unico: registro.codigo,
+          fecha_registro: new Date().toISOString(),
+        };
+        
+        visitanteCreado = await visitantesService.crear(visitanteData);
+        console.log('✅ Nuevo visitante creado:', visitanteCreado?.email);
+      } else {
+        console.log('✅ Visitante existente encontrado:', visitanteExistente.email);
+      }
       
-      // PASO 2: Crear registro de evento en Supabase
+      // PASO 2: Crear registro de evento en Supabase (solo si visitante válido)
       if (visitanteCreado) {
         const registroEventoData = {
           evento_id: eventoId,
           visitante_id: visitanteCreado.id,
-          codigo_acceso: registro.codigo,
+          codigo_confirmacion: registro.codigo, // 🔧 CORRECCIÓN: campo correcto del schema
           fecha_registro: new Date().toISOString(),
-          check_in_realizado: false,
+          estado: 'confirmado', // 🔧 CORRECCIÓN: usar schema real verificado
         };
         
         const registroCreado = await registroEventosService.crear(registroEventoData);
-        console.log('✅ Registro de evento sincronizado:', registroCreado?.codigo_acceso);
+        console.log('✅ Registro de evento sincronizado:', registroCreado?.codigo_confirmacion);
+        
+        // 🔧 CORRECCIÓN DEFINITIVA: El trigger de BD ya incrementa automáticamente
+        // NO necesitamos incrementar manualmente el contador
+        if (registroCreado) {
+          console.log('✅ Registro exitoso en Supabase - trigger de BD actualizará contador automáticamente');
+          console.log('🔄 Invalidando cache para reflejar cambios...');
+        } else {
+          console.error('❌ Registro falló en Supabase');
+        }
+      } else {
+        console.error('❌ Visitante no válido - NO incrementando contador');
       }
       
       // Invalidar cache para sincronización con panel admin
@@ -185,35 +204,45 @@ const EventosPublicos: Component = () => {
     }
   };
 
-  const actualizarContadorEventos = (eventoId: string) => {
+  const actualizarContadorEventos = async (eventoId: string) => {
     console.log('📊 Actualizando contador para evento:', eventoId);
     
     try {
-      // Actualizar en el estado local
-      setEventos(prev => prev.map(evento => {
-        if (evento.id === eventoId) {
-          console.log(`📈 Evento ${evento.titulo}: ${evento.registrados} → ${evento.registrados + 1}`);
-          return {
-            ...evento,
-            registrados: (evento.registrados || 0) + 1
-          };
-        }
-        return evento;
-      }));
+      // 🔧 CORRECCIÓN DEFINITIVA: Obtener valor actual desde Supabase ANTES de incrementar
+      const eventoActual = await eventosService.obtenerPorId(eventoId);
+      if (!eventoActual) {
+        console.error('❌ Evento no encontrado en Supabase:', eventoId);
+        return;
+      }
       
-      // Sincronización con eventosService (usar valor actual, no incrementar)
-      const eventoActual = eventos().find(e => e.id === eventoId);
-      if (eventoActual) {
-        console.log(`🔧 CORRECCIÓN: Sincronizando valor actual sin incrementar: ${eventoActual.registrados}`);
+      const registradosActuales = eventoActual.registrados || 0;
+      const nuevosRegistrados = registradosActuales + 1;
+      
+      console.log(`📈 Incremento CORRECTO: ${registradosActuales} → ${nuevosRegistrados}`);
+      
+      // Actualizar PRIMERO en Supabase con valor exacto
+      const eventoActualizado = await eventosService.actualizar(eventoId, {
+        registrados: nuevosRegistrados, // ✅ Valor exacto calculado
+        updated_at: new Date().toISOString()
+      });
+      
+      if (eventoActualizado) {
+        console.log('✅ Supabase actualizado exitosamente');
         
-        eventosService.actualizar(eventoId, {
-          registrados: eventoActual.registrados + 1, // Ya que se incrementó arriba
-          updated_at: new Date().toISOString()
-        }).then(() => {
-          console.log('✅ EventosService sincronizado SIN duplicación');
-        }).catch((err) => {
-          console.log('⚠️ Error en sincronización eventosService:', err);
-        });
+        // DESPUÉS actualizar estado local con el valor confirmado desde Supabase
+        setEventos(prev => prev.map(evento => {
+          if (evento.id === eventoId) {
+            return {
+              ...evento,
+              registrados: nuevosRegistrados
+            };
+          }
+          return evento;
+        }));
+        
+        console.log('✅ Estado local sincronizado con Supabase - NO HAY DUPLICACIÓN');
+      } else {
+        console.error('❌ Error actualizando en Supabase - estado local NO modificado');
       }
       
     } catch (error) {
@@ -244,7 +273,7 @@ const EventosPublicos: Component = () => {
     }
   };
 
-  const handleRegistro = (evento: Evento) => {
+  const handleRegistro = async (evento: Evento) => {
     if (!validarFormulario(registroData())) {
       alert('❌ Por favor, completa todos los campos requeridos.');
       return;
@@ -268,17 +297,64 @@ const EventosPublicos: Component = () => {
       return;
     }
 
-    // 1. Crear visitante general si no existe
-    crearVisitanteDesdeEvento(data.nombre, data.email, data.telefono);
-    
-    // 2. Generar código y guardar registro de evento
-    const codigo = generateEventCode(evento.id, data.email);
-    guardarRegistroLocal(evento.id, data.email, data.nombre, codigo, evento.titulo);
-    
-    // 3. Mensaje de confirmación
-    alert(`🎉 ¡Registro exitoso!\n\n👤 ${data.nombre}\n📧 ${data.email}\n🎫 ${codigo}\n\n📧 Recibirás un email con la información del evento.\n💾 Tus datos se han guardado para futuras visitas.\n💡 Guarda tu código para hacer check-in el día del evento.`);
-    
-    closeRegistroModal();
+    try {
+      // 1. Crear visitante en Supabase si no existe
+      console.log('👤 Verificando visitante en Supabase:', data.email);
+      let visitanteCreado = await visitantesService.buscarPorEmail(data.email);
+      
+      if (!visitanteCreado) {
+        console.log('➕ Creando nuevo visitante en Supabase...');
+        const visitanteData = {
+          nombre: data.nombre,
+          apellido: '', // ✅ AGREGAR apellido requerido por BD
+          email: data.email.toLowerCase(),
+          telefono: data.telefono || '', // ✅ INCLUIR TELÉFONO
+          codigo_unico: `CCB-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+        };
+        
+        visitanteCreado = await visitantesService.crear(visitanteData);
+        console.log('✅ Nuevo visitante creado en Supabase:', visitanteCreado?.email);
+      } else {
+        console.log('✅ Visitante existente encontrado:', visitanteCreado.email);
+      }
+      
+      // También guardar en localStorage para compatibilidad
+      crearVisitanteDesdeEvento(data.nombre, data.email, data.telefono);
+      
+      // 2. Generar código único garantizado verificando BD
+      console.log('🎫 Generando código único para evento:', evento.titulo);
+      const codigo = await generateUniqueEventCode(
+        evento.id, 
+        data.email,
+        registroEventosService.verificarCodigoExiste
+      );
+      console.log('✅ Código único generado:', codigo);
+      
+      // 3. Crear registro de evento en Supabase
+      if (visitanteCreado) {
+        const registroEventoData = {
+          evento_id: evento.id,
+          visitante_id: visitanteCreado.id,
+          codigo_confirmacion: codigo, // ✅ CORRECTO: usar codigo_confirmacion según schema
+          fecha_registro: new Date().toISOString(),
+          estado: 'confirmado' // ✅ CORRECTO: estado válido según schema
+        };
+        
+        const registroCreado = await registroEventosService.crear(registroEventoData);
+        console.log('✅ Registro de evento creado en Supabase:', registroCreado?.codigo_confirmacion);
+      }
+      
+      // 4. Guardar registro local para compatibilidad
+      guardarRegistroLocal(evento.id, data.email, data.nombre, codigo, evento.titulo);
+      
+      // 5. Mensaje de confirmación
+      alert(`🎉 ¡Registro exitoso!\n\n👤 ${data.nombre}\n📧 ${data.email}\n🎫 ${codigo}\n\n📧 Recibirás un email con la información del evento.\n💾 Tus datos se han guardado para futuras visitas.\n💡 Guarda tu código para hacer check-in el día del evento.`);
+      
+      closeRegistroModal();
+    } catch (error) {
+      console.error('❌ Error durante el registro:', error);
+      alert('❌ Error generando código único. Por favor, intenta nuevamente.');
+    }
   };
 
   const mostrarHistorialRegistros = () => {
