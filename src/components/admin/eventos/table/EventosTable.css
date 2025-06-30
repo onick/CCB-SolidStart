@@ -1,0 +1,138 @@
+/* Estilos específicos para EventosTableView */
+
+/* Estilos para mejorar la tabla responsive */
+@media (max-width: 1200px) {
+  .eventos-table {
+    font-size: 14px;
+  }
+  
+  .eventos-table th,
+  .eventos-table td {
+    padding: 12px 8px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .eventos-table {
+    font-size: 12px;
+  }
+  
+  .eventos-table .descripcion-cell {
+    max-width: 150px;
+  }
+  
+  .eventos-table .acciones-cell {
+    min-width: 140px;
+  }
+}
+
+/* Animaciones para hover en filas */
+.eventos-table tbody tr {
+  transition: all 0.2s ease-in-out;
+}
+
+.eventos-table tbody tr:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Mejorar botones de acciones */
+.eventos-table .action-btn {
+  transition: all 0.2s ease;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.eventos-table .action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.eventos-table .action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Barra de progreso mejorada */
+.progress-bar {
+  background: #f3f4f6;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Estados de loading mejorados */
+.loading-state {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Filtros mejorados */
+.filtros-container input,
+.filtros-container select {
+  border: 2px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.filtros-container input:focus,
+.filtros-container select:focus {
+  border-color: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.2);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+/* Badges mejorados */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.badge:hover {
+  transform: scale(1.05);
+}
+
+/* Ordenamiento de columnas */
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.sortable-header:hover {
+  background: rgba(0,0,0,0.05);
+  transform: translateY(-1px);
+}
