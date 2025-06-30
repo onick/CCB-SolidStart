@@ -119,13 +119,14 @@ const EventosPublicos: Component = () => {
     }
   };
 
-  const guardarRegistroLocal = (eventoId: string, email: string, nombre: string, codigo: string, eventoTitulo: string) => {
+  const guardarRegistroLocal = (eventoId: string, email: string, nombre: string, telefono: string, codigo: string, eventoTitulo: string) => {
     const registros = JSON.parse(localStorage.getItem('ccb_registros_usuario') || '[]');
     
     const nuevoRegistro = {
       eventoId,
       email: email.toLowerCase(),
       nombre,
+      telefono, // 🔧 CORRECCIÓN: Agregar teléfono al registro
       codigo,
       eventoTitulo,
       fechaRegistro: new Date().toISOString(),
@@ -146,8 +147,9 @@ const EventosPublicos: Component = () => {
     try {
       console.log('🔄 Sincronizando registro con servicios administrativos...', registro);
       
-      // CORRECCIÓN: Verificar si ya existe el visitante primero usando visitorStore
-      const visitanteExistente = visitorStore.findVisitor(registro.email);
+      // 🔧 CORRECCIÓN CRÍTICA: Buscar SOLO por email exacto para evitar coincidencias incorrectas
+      const visitantesConEmail = visitorStore.findVisitorsByEmail(registro.email);
+      const visitanteExistente = visitantesConEmail.find(v => v.email?.toLowerCase() === registro.email.toLowerCase());
       let visitanteCreado = visitanteExistente;
       
       if (!visitanteExistente) {
@@ -312,7 +314,7 @@ const EventosPublicos: Component = () => {
       console.log('✅ Código único generado:', codigo);
       
       // 3. Guardar registro de evento
-      guardarRegistroLocal(evento.id, data.email, data.nombre, codigo, evento.titulo);
+      guardarRegistroLocal(evento.id, data.email, data.nombre, data.telefono, codigo, evento.titulo);
       
       // 4. Mensaje de confirmación
       alert(`🎉 ¡Registro exitoso!\n\n👤 ${data.nombre}\n📧 ${data.email}\n🎫 ${codigo}\n\n📧 Recibirás un email con la información del evento.\n💾 Tus datos se han guardado para futuras visitas.\n💡 Guarda tu código para hacer check-in el día del evento.`);

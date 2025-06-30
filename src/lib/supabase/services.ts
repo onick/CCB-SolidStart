@@ -228,6 +228,23 @@ const mockEventos: Evento[] = [
     estado: 'proximo' as const,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
+  },
+  {
+    id: 'testing-completo-2025',
+    titulo: "🔥 Testing Corrección Completa",
+    descripcion: "Evento especialmente creado para documentar el proceso completo de registro y verificar que la corrección de duplicación funciona perfectamente desde 0 registrados",
+    categoria: "taller",
+    fecha: "2025-06-25",
+    hora: "18:30",
+    duracion: 2,
+    ubicacion: "Sala de Testing CCB",
+    capacidad: 30,
+    registrados: 0,
+    precio: 500,
+    imagen: "",
+    estado: 'activo' as const,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   }
 ];
 
@@ -374,6 +391,46 @@ const recalcularContador = async (eventoId: string): Promise<boolean> => {
   }
 };
 
+// Función para actualizar contador de eventos localmente (CORRECCIÓN DUPLICACIÓN)
+const actualizarContadorRegistrados = (eventoId: string, incremento: number = 1): boolean => {
+  try {
+    const eventoIndex = eventosMockDinamicos.findIndex(e => e.id === eventoId);
+    if (eventoIndex === -1) {
+      console.warn(`⚠️ Evento ${eventoId} no encontrado`);
+      return false;
+    }
+    
+    const evento = eventosMockDinamicos[eventoIndex];
+    const nuevosRegistrados = evento.registrados + incremento;
+    
+    // Validaciones
+    if (incremento > 0 && nuevosRegistrados > evento.capacidad) {
+      console.warn(`❌ Capacidad máxima alcanzada`);
+      return false;
+    }
+    
+    if (nuevosRegistrados < 0) {
+      console.warn(`❌ Registrados no puede ser negativo`);
+      return false;
+    }
+    
+    // Actualizar
+    eventosMockDinamicos[eventoIndex] = {
+      ...evento,
+      registrados: nuevosRegistrados,
+      updated_at: new Date().toISOString()
+    };
+    
+    guardarEventosEnStorage(eventosMockDinamicos);
+    console.log(`✅ Contador actualizado: ${evento.registrados} → ${nuevosRegistrados}`);
+    return true;
+    
+  } catch (error) {
+    console.error(`❌ Error actualizando contador:`, error);
+    return false;
+  }
+};
+
 // Determinar estado dinámico del evento (incluyendo "agotado")
 const determinarEstadoEvento = (evento: Evento): 'activo' | 'proximo' | 'completado' | 'agotado' => {
   // Primero verificar si está agotado
@@ -411,37 +468,89 @@ export const visitantesService = {
   },
 
   async crear(visitante: Omit<Visitante, 'id' | 'created_at' | 'updated_at'>): Promise<Visitante | null> {
-    const { data, error } = await supabase
-      .from('visitantes')
-      .insert([{
-        ...visitante,
-        fecha_registro: new Date().toISOString(),
-        estado: 'activo'
-      }])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creando visitante:', error);
+    // CORRECCIÓN: Manejar códigos duplicados inteligentemente
+    try {
+      const { data, error } = await supabase
+        .from('visitantes')
+        .insert([{
+          ...visitante,
+          fecha_registro: new Date().toISOString(),
+          estado: 'activo'
+        }])
+        .select()
+        .single();
+      
+      if (error) {
+        // Si es error de código duplicado, buscar visitante existente por email
+        if (error.code === '23505' && error.message.includes('codigo_unico')) {
+          console.log('🔄 Código duplicado detectado, buscando visitante por email...', visitante.email);
+          
+          try {
+            const visitanteExistente = await this.buscarPorEmail(visitante.email);
+            if (visitanteExistente) {
+              console.log('✅ Visitante encontrado por email:', visitanteExistente.email);
+              return visitanteExistente;
+            } else {
+              console.log('⚠️ Visitante no encontrado por email, generando nuevo código...');
+              
+              // Generar nuevo código único y reintentar
+              const nuevoCodigoUnico = `CCB-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+              console.log('🔄 Reintentando con nuevo código:', nuevoCodigoUnico);
+              
+              const { data: dataReintento, error: errorReintento } = await supabase
+                .from('visitantes')
+                .insert([{
+                  ...visitante,
+                  codigo_unico: nuevoCodigoUnico,
+                  fecha_registro: new Date().toISOString(),
+                  estado: 'activo'
+                }])
+                .select()
+                .single();
+              
+              if (errorReintento) {
+                console.error('❌ Error en segundo intento:', errorReintento);
+                return null;
+              }
+              
+              console.log('✅ Visitante creado con nuevo código:', nuevoCodigoUnico);
+              return dataReintento;
+            }
+          } catch (errorBusqueda) {
+            console.error('❌ Error buscando visitante por email:', errorBusqueda);
+            return null;
+          }
+        }
+        
+        console.error('Error creando visitante:', error);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error inesperado creando visitante:', error);
       return null;
     }
-    
-    return data;
   },
 
   async buscarPorEmail(email: string): Promise<Visitante | null> {
-    const { data, error } = await supabase
-      .from('visitantes')
-      .select('*')
-      .eq('email', email)
-      .single();
-    
-    if (error) {
-      console.error('Error buscando visitante:', error);
+    try {
+      const { data, error } = await supabase
+        .from('visitantes')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle(); // 🔧 CORRECCIÓN: usar maybeSingle() en lugar de single()
+      
+      if (error) {
+        console.error('Error buscando visitante:', error);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error inesperado buscando visitante:', error);
       return null;
     }
-    
-    return data;
   },
 
   async obtenerEstadisticas() {
@@ -492,6 +601,32 @@ export const visitantesService = {
     
     console.log(`✅ Visitante ${id} eliminado de Supabase`);
     return true;
+  },
+
+  // Actualizar un visitante
+  async actualizar(id: string, updates: Partial<Omit<Visitante, 'id' | 'created_at'>>): Promise<Visitante | null> {
+    if (!isSupabaseConfigured()) {
+      console.log(`🔄 Simulando actualización de visitante mock: ${id}`);
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('visitantes')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error actualizando visitante:', error);
+      return null;
+    }
+    
+    console.log(`✅ Visitante ${id} actualizado en Supabase`);
+    return data;
   },
 
   async crearLote(visitantes: Omit<Visitante, 'id' | 'created_at' | 'updated_at'>[]): Promise<{ exitosos: number; errores: number; detalles: string[] }> {
@@ -860,6 +995,64 @@ const guardarRegistrosEnStorage = (registros: any[]) => {
 registrosMockDinamicos = cargarRegistrosDelStorage();
 
 export const registroEventosService = {
+  // Verificar si un código de confirmación ya existe en la BD
+  async verificarCodigoExiste(codigo: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('registro_eventos')
+        .select('codigo_confirmacion')
+        .eq('codigo_confirmacion', codigo)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        console.error('Error verificando código:', error);
+        return false; // En caso de error, asumir que no existe
+      }
+      
+      const existe = !!data;
+      console.log(`🔍 Código ${codigo} ${existe ? 'YA EXISTE' : 'disponible'} en BD`);
+      return existe;
+    } catch (error) {
+      console.error('Error inesperado verificando código:', error);
+      return false;
+    }
+  },
+
+  // CORRECCIÓN: Agregar método crear faltante con validación de duplicados
+  async crear(registroData: any): Promise<any | null> {
+    try {
+      // 🔧 CORRECCIÓN CRÍTICA: Verificar si ya existe el registro ANTES de insertar
+      const { data: existeRegistro, error: errorVerificacion } = await supabase
+        .from('registro_eventos')
+        .select('id, codigo_confirmacion')
+        .eq('evento_id', registroData.evento_id)
+        .eq('visitante_id', registroData.visitante_id)
+        .single();
+      
+      if (existeRegistro) {
+        console.log('⚠️ Registro ya existe para este visitante en este evento:', existeRegistro.codigo_confirmacion);
+        return existeRegistro; // Retornar el registro existente en lugar de fallar
+      }
+
+      const { data, error } = await supabase
+        .from('registro_eventos')
+        .insert([registroData])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error creando registro de evento:', error);
+        return null;
+      }
+      
+      console.log('✅ Registro de evento creado:', data?.codigo_confirmacion);
+      return data;
+    } catch (error) {
+      console.error('Error inesperado creando registro:', error);
+      return null;
+    }
+  },
+
   async registrarVisitanteEnEvento(
     visitanteId: string, 
     eventoId: string, 
