@@ -1,5 +1,6 @@
 import { Component, createSignal, createEffect, onMount, Show, For } from 'solid-js';
 import { visitantesService, eventosService, forceInvalidateCache } from '../../lib/supabase/services';
+import visitorStore from '../../stores/visitorStore';
 import { Visitante, Evento } from '../../lib/types';
 import AdminLayout from '../../components/AdminLayout';
 import AdminHeader from '../../components/AdminHeader';
@@ -121,9 +122,9 @@ const VisitantesAdmin: Component = () => {
       forceInvalidateCache();
       
       const [visitantesData, eventosData, estadisticasData] = await Promise.all([
-        visitantesService.obtenerTodos(),
+        Promise.resolve(visitorStore.visitors), // Usar el store
         eventosService.obtenerTodos(),
-        visitantesService.obtenerEstadisticas()
+        Promise.resolve(visitorStore.getStats()) // Usar estadísticas del store
       ]);
       
       setVisitantes(visitantesData);
@@ -154,9 +155,9 @@ const VisitantesAdmin: Component = () => {
       forceInvalidateCache();
       
       const [visitantesData, eventosData, estadisticasData] = await Promise.all([
-        visitantesService.obtenerTodos(),
+        Promise.resolve(visitorStore.visitors), // Usar el store
         eventosService.obtenerTodos(),
-        visitantesService.obtenerEstadisticas()
+        Promise.resolve(visitorStore.getStats()) // Usar estadísticas del store
       ]);
       
       // Actualizar sin mostrar loading

@@ -1,5 +1,6 @@
 import { Component, createSignal, createEffect, Show, For } from 'solid-js';
 import { visitantesService, eventosService } from '../../lib/supabase/services';
+import visitorStore from '../../stores/visitorStore';
 import { Visitante, Evento } from '../../lib/types';
 import AdminLayout from '../../components/AdminLayout';
 import { CheckInHeaderConfig } from '../../components/admin/checkin';
@@ -401,7 +402,7 @@ const CheckInAdmin: Component = () => {
       console.log('🔄 [CHECK-IN] Cargando datos iniciales...');
       
       const [visitantesData, eventosData] = await Promise.all([
-        visitantesService.obtenerTodos(),
+        Promise.resolve(visitorStore.visitors), // Usar el store
         eventosService.obtenerTodos()
       ]);
       
